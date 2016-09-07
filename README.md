@@ -1,6 +1,6 @@
 # Annotation Search
 
-This repository contains the application of [Succinct](succinct.cs.berkeley.edu)
-to solve the annotation search problem.
+This project uses [Succinct](succinct.cs.berkeley.edu) for supporting 
+search on annotated documents.
 
 TODO: Add more documentation.
