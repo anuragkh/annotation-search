@@ -44,11 +44,11 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
     *
     * @param location The prefix for the partition's save location.
     */
-  def save(location: String): Unit = {
+  def save(location: String, conf: Configuration): Unit = {
     val pathDoc = new Path(location + ".sdocs")
     val pathDocIds = new Path(location + ".sdocids")
 
-    val fs = FileSystem.get(pathDoc.toUri, new Configuration())
+    val fs = FileSystem.get(pathDoc.toUri, conf)
 
     val osDoc = fs.create(pathDoc)
     val osDocIds = new ObjectOutputStream(fs.create(pathDocIds))

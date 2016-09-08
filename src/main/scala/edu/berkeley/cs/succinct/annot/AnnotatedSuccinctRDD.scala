@@ -1,5 +1,7 @@
 package edu.berkeley.cs.succinct.annot
 
+import java.util.Properties
+
 import edu.berkeley.cs.succinct.annot.impl.AnnotatedSuccinctRDDImpl
 import edu.berkeley.cs.succinct.buffers.SuccinctIndexedFileBuffer
 import edu.berkeley.cs.succinct.buffers.annot._
@@ -119,11 +121,18 @@ abstract class AnnotatedSuccinctRDD(@transient sc: SparkContext,
     *
     * @param location The path where the [[AnnotatedSuccinctRDD]] should be stored.
     */
-  def save(location: String): Unit = {
+  def save(location: String, conf: Configuration = new Configuration()): Unit = {
     val path = new Path(location)
-    val fs = FileSystem.get(path.toUri, new Configuration())
+    val fs = FileSystem.get(path.toUri, conf)
     if (!fs.exists(path)) {
       fs.mkdirs(path)
+    }
+
+    val it = conf.iterator()
+    val properties = new Properties()
+    while (it.hasNext) {
+      val entry = it.next()
+      properties.setProperty(entry.getKey, entry.getValue)
     }
 
     partitionsRDD.zipWithIndex().foreach(entry => {
@@ -131,7 +140,15 @@ abstract class AnnotatedSuccinctRDD(@transient sc: SparkContext,
       val partition = entry._1
       val partitionLocation = location.stripSuffix("/") + "/part-" + "%05d".format(i)
 
-      partition.save(partitionLocation)
+      val localConf = new Configuration()
+      val propIt = properties.entrySet().iterator()
+      while (propIt.hasNext) {
+        val entry = propIt.next()
+        val propName = entry.getKey.asInstanceOf[String]
+        val propValue = entry.getValue.asInstanceOf[String]
+        localConf.set(propName, propValue)
+      }
+      partition.save(partitionLocation, localConf)
     })
 
     val successPath = new Path(location.stripSuffix("/") + "/_SUCCESS")
