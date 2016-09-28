@@ -24,11 +24,9 @@ class AnnotatedSuccinctRDDImpl private[succinct](val partitionsRDD: RDD[Annotate
   setName("AnnotatedSuccinctRDD")
 
   /**
-    * Persists the Succinct partitions at the specified storage level, ignoring any existing target
-    * storage level.
+    * Cannot change persistence level.
     */
   override def persist(newLevel: StorageLevel): this.type = {
-    partitionsRDD.persist(newLevel)
     this
   }
 
@@ -37,9 +35,8 @@ class AnnotatedSuccinctRDDImpl private[succinct](val partitionsRDD: RDD[Annotate
     this
   }
 
-  /** Persists the Succinct partitions at MEMORY_ONLY level. */
+  /** Unaffected since the RDD is always persisted by default. */
   override def cache(): this.type = {
-    partitionsRDD.persist(StorageLevel.MEMORY_ONLY)
     this
   }
 
