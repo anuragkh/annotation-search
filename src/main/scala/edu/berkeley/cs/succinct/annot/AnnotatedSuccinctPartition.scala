@@ -220,7 +220,8 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
     })
       .foldLeft(Iterator[Annotation]())(_ ++ _)
       .filter(a => {
-        metadataFilter(a.getMetadata) && (textFilter == null || textFilter(extractDocument(a.getDocId, a.getStartOffset, a.getEndOffset - a.getStartOffset)))
+        (metadataFilter == null || metadataFilter(a.getMetadata))  &&
+          (textFilter == null || textFilter(extractDocument(a.getDocId, a.getStartOffset, a.getEndOffset - a.getStartOffset)))
       })
       .map(a => Result(a.getDocId, a.getStartOffset, a.getEndOffset, a))
   }
@@ -747,6 +748,16 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
     * @return The number of documents in the partition.
     */
   def count: Int = keys.length
+
+  def storageBreakdown(): String = {
+    val keysSize = keys.map(_.length).sum
+    val docsSize = documentBuffer.getCompressedSize
+    val annotSize = annotBufferMap
+      .map(entry => entry._1 + " => (compressed) " + entry._2.getCompressedSize + " (original)" + entry._2.getOriginalSize)
+      .mkString("\n")
+
+    "keys: " + keysSize + "\ndocs: " + docsSize + "\n annots:\n" + annotSize
+  }
 }
 
 object AnnotatedSuccinctPartition {

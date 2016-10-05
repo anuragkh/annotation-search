@@ -155,6 +155,14 @@ abstract class AnnotatedSuccinctRDD(@transient sc: SparkContext,
     fs.create(successPath).close()
   }
 
+  // DEBUG: Storage
+  def printStorageStats(): Unit = {
+    val stats = partitionsRDD.zipWithIndex()
+      .map(entry => (entry._2, entry._1.storageBreakdown())).collect()
+
+    stats.foreach(println)
+  }
+
 }
 
 object AnnotatedSuccinctRDD {

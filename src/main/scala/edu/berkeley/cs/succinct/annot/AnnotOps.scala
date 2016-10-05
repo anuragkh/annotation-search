@@ -34,7 +34,7 @@ case class Regex(query: String) extends Operator
   *                         annotation.
   */
 case class FilterAnnotations(annotClassFilter: String, annotTypeFilter: String,
-                             metadataFilter: String => Boolean = _ => true,
+                             metadataFilter: String => Boolean = null,
                              textFilter: String => Boolean = null) extends Operator
 
 /**
