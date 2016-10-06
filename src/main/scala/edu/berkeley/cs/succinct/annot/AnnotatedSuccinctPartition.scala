@@ -722,14 +722,15 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
   def count: Int = keys.length
 
   def storageBreakdown(): String = {
+    val mb = 1024*1024
     val keysSize = keys.map(_.length).sum
-    val docsSize = documentBuffer.getSize
-    val docsSizeCompresseed = documentBuffer.getCompressedSize
-    val annotSize = annotationBuffer.getOriginalSize
-    val annotSizeCompressed = annotationBuffer.getCompressedSize
+    val docsSize = documentBuffer.getSize / mb
+    val docsSizeCompresseed = documentBuffer.getCompressedSize / mb
+    val annotSize = annotationBuffer.getOriginalSize / mb
+    val annotSizeCompressed = annotationBuffer.getCompressedSize / mb
     "keys: " + keysSize +
-      "\tdocs: (compressed) " + docsSizeCompresseed + " (uncompressed) " + docsSize + "(" +
-      "\tannots: (compressed) " + annotSizeCompressed + " (uncompressed) " + annotSize
+      "\tdocs: (compressed mb) " + docsSizeCompresseed + " (uncompressed mb) " + docsSize +
+      "\tannots: (compressed mb) " + annotSizeCompressed + " (uncompressed mb) " + annotSize
   }
 }
 
