@@ -74,7 +74,7 @@ class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean) extends Serializab
   }
 
   def serializeAnnotationRecord(dat: Array[(Int, Int, Int, String)], out: DataOutputStream): Unit = {
-    val recordSize: Int = 4 + 14 * dat.length + dat.map(_._4.length).sum
+    val recordSize: Int = 4 + 14 * dat.length + dat.map(_._4.getBytes().length).sum
     out.writeInt(recordSize)
     out.writeInt(dat.length)
     dat.map(_._2).foreach(i => out.writeInt(i))
