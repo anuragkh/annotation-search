@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+hostname=`hostname`
+SPARK_HOME="/root/spark"
+bin="$(cd "`dirname "$0"`"; pwd)"
+JAR_PATH=`ls $bin/../target/annotation-search-*-jar-with-dependencies.jar`
+
+$SPARK_HOME/bin/spark-submit \
+  --class edu.berkeley.cs.succinct.annot.example.Construct \
+  --master $hostname:7077
+  --executor-cores 1 \
+  $JAR_PATH \
+  $@
+
+
