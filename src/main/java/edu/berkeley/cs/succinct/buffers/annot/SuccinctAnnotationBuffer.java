@@ -10,8 +10,6 @@ import java.util.Arrays;
 public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
 
   public static final char DELIM = '^';
-  private transient String annotClass;
-  private transient String annotType;
   private transient int[] docIdIndexes;
   private transient ByteBuffer readAnnotBuffer;
 
@@ -20,10 +18,8 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
    *
    * @param input The input byte array.
    */
-  public SuccinctAnnotationBuffer(String annotClass, String annotType, int[] docIdIndexes, int[] annotationOffsets, byte[] input) {
+  public SuccinctAnnotationBuffer(int[] docIdIndexes, int[] annotationOffsets, byte[] input) {
     super(input, annotationOffsets);
-    this.annotClass = annotClass;
-    this.annotType = annotType;
     this.docIdIndexes = docIdIndexes;
   }
 
@@ -33,14 +29,12 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
    * @param is       Input stream to load the data from
    * @param fileSize Size of the file.
    */
-  public SuccinctAnnotationBuffer(String annotClass, String annotType, DataInputStream is, int fileSize) {
+  public SuccinctAnnotationBuffer(DataInputStream is, int fileSize) {
     try {
       readFromStream(is, fileSize);
     } catch (IOException e) {
       e.printStackTrace();
     }
-    this.annotClass = annotClass;
-    this.annotType = annotType;
   }
 
   /**
@@ -54,24 +48,6 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
     }
     return super.getCompressedSize() + (12
       + docIdIndexes.length * SuccinctConstants.INT_SIZE_BYTES);
-  }
-
-  /**
-   * Get the Annotation Class.
-   *
-   * @return The Annotation Class.
-   */
-  public String getAnnotClass() {
-    return annotClass;
-  }
-
-  /**
-   * Get the Annotation Type.
-   *
-   * @return The Annotation Type
-   */
-  public String getAnnotType() {
-    return annotType;
   }
 
   /**
@@ -90,10 +66,10 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
    * @param docIdIdx The document ID index.
    * @return The corresponding annotation record offset.
    */
-  public int getAnnotationRecordOffset(int docIdIdx) {
+  public int getAnnotationRecordOffset(int docIdIdx, int startId, int endId) {
     if (docIdIdx < 0)
       return -1;
-    int offsetIdx = Arrays.binarySearch(docIdIndexes, 0, docIdIndexes.length, docIdIdx);
+    int offsetIdx = Arrays.binarySearch(docIdIndexes, startId, endId, docIdIdx);
     if (offsetIdx < 0)
       return -1;
     return getRecordOffset(offsetIdx);
@@ -105,7 +81,8 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
    * @param recordIdx The annotation record index.
    * @return The annotation record corresponding to the record index.
    */
-  public AnnotationRecord getAnnotationRecord(int recordIdx, String docId) {
+  public AnnotationRecord getAnnotationRecord(String annotClass, String annotType, int recordIdx,
+    String docId) {
     if (recordIdx < 0 || recordIdx >= getNumRecords()) {
       return null;
     }
@@ -116,7 +93,7 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
 
     // Get offset to data
     int dataOffset = nEntriesOffset + SuccinctConstants.INT_SIZE_BYTES;
-    return new AnnotationRecord(dataOffset, docId, nEntries, this);
+    return new AnnotationRecord(annotClass, annotType, dataOffset, docId, nEntries, this);
   }
 
   /**
@@ -125,8 +102,9 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
    * @param docId The document ID.
    * @return The annotation record corresponding to the document ID.
    */
-  public AnnotationRecord getAnnotationRecord(String docId, int docIdIndex) {
-    int recordOffset = getAnnotationRecordOffset(docIdIndex);
+  public AnnotationRecord getAnnotationRecord(String annotClass, String annotType, String docId,
+    int docIdIndex, int startId, int endId) {
+    int recordOffset = getAnnotationRecordOffset(docIdIndex, startId, endId);
     if (recordOffset < 0) {
       return null;
     }
@@ -137,7 +115,7 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
     // Get offset to data
     int dataOffset = recordOffset + SuccinctConstants.INT_SIZE_BYTES;
 
-    return new AnnotationRecord(dataOffset, docId, nEntries, this);
+    return new AnnotationRecord(annotClass, annotType, dataOffset, docId, nEntries, this);
   }
 
   /**
@@ -189,8 +167,6 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
    * @throws IOException
    */
   private void writeObject(ObjectOutputStream oos) throws IOException {
-    oos.writeObject(annotClass);
-    oos.writeObject(annotType);
     oos.writeObject(docIdIndexes);
   }
 
@@ -201,8 +177,6 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
    * @throws IOException
    */
   private void readObject(ObjectInputStream ois) throws ClassNotFoundException, IOException {
-    annotClass = (String) ois.readObject();
-    annotType = (String) ois.readObject();
     docIdIndexes = (int[]) ois.readObject();
   }
 }

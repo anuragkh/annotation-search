@@ -15,7 +15,8 @@ import scala.collection.JavaConverters._
 import scala.io.Source
 
 class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: SuccinctIndexedFile,
-                                 val annotBufferMap: Map[String, SuccinctAnnotationBuffer])
+                                 val annotationBuffer: SuccinctAnnotationBuffer,
+                                 val annotBufferMap: Map[String, (Int, Int)])
   extends KnownSizeEstimation with Serializable {
 
   /**
@@ -58,23 +59,18 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
     osDoc.close()
     osDocIds.close()
 
-    // Write annotation buffers
-    val pathAnnotToc = new Path(location + ".sannots.toc")
+    // Write annotation buffer
     val pathAnnot = new Path(location + ".sannots")
-    val osAnnotToc = fs.create(pathAnnotToc)
     val osAnnot = fs.create(pathAnnot)
-    annotBufferMap.foreach(kv => {
-      val key = kv._1
-      val buf = kv._2
-      val startPos = osAnnot.getPos
-      buf.writeToStream(osAnnot)
-      val endPos = osAnnot.getPos
-      val size = endPos - startPos
-      // Add entry to TOC
-      osAnnotToc.writeBytes(s"$key\t$startPos\t$size\n")
-    })
-    osAnnotToc.close()
+    annotationBuffer.writeToStream(osAnnot)
     osAnnot.close()
+
+    // Write annotation TOC
+    val pathAnnotToc = new Path(location + ".sannots.toc")
+    val osAnnotToc = fs.create(pathAnnotToc)
+    annotBufferMap.foreach(kv => osAnnotToc.writeBytes(s"${kv._1}\t${kv._2._1}\t${kv._2._2}\n"))
+    osAnnotToc.close()
+
   }
 
   /**
@@ -84,7 +80,7 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
     */
   override def estimatedSize: Long = {
     val docSize = documentBuffer.getCompressedSize
-    val annotSize = annotBufferMap.values.map(_.getCompressedSize).sum
+    val annotSize = annotationBuffer.getCompressedSize
     val docIdsSize = SizeEstimator.estimate(keys)
     docSize + annotSize + docIdsSize
   }
@@ -193,15 +189,19 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
                         textFilter: String => Boolean): Iterator[Result] = {
     val delim = "\\" + SuccinctAnnotationBuffer.DELIM
     val keyFilter = delim + annotClassFilter + delim + annotTypeFilter + delim
-    annotBufferMap.filterKeys(_ matches keyFilter).values.map(buf => {
+    annotBufferMap.filterKeys(_ matches keyFilter).map(kv => {
+      val range = kv._2
+      val keyFragments = kv._1.replaceFirst("\\^", "").split("\\^")
+      val annotClass = keyFragments(0)
+      val annotType = keyFragments(1)
       new Iterator[Annotation] {
-        var curRecordIdx = -1
+        var curRecordIdx = range._1 - 1
         var annotationIterator = nextAnnotationRecordIterator
 
         def nextAnnotationRecordIterator: Iterator[Annotation] = {
           curRecordIdx += 1
-          if (curRecordIdx >= buf.getNumRecords) return null
-          val res = buf.getAnnotationRecord(curRecordIdx, keys(buf.getDocIdIndex(curRecordIdx)))
+          if (curRecordIdx >= range._2) return null
+          val res = annotationBuffer.getAnnotationRecord(annotClass, annotType, curRecordIdx, keys(annotationBuffer.getDocIdIndex(curRecordIdx)))
           res.iterator().asScala
         }
 
@@ -219,7 +219,7 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
     })
       .foldLeft(Iterator[Annotation]())(_ ++ _)
       .filter(a => {
-        (metadataFilter == null || metadataFilter(a.getMetadata))  &&
+        (metadataFilter == null || metadataFilter(a.getMetadata)) &&
           (textFilter == null || textFilter(extractDocument(a.getDocId, a.getStartOffset, a.getEndOffset - a.getStartOffset)))
       })
       .map(a => Result(a.getDocId, a.getStartOffset, a.getEndOffset, a))
@@ -243,9 +243,9 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
                     op: (AnnotationRecord, Int, Int) => Array[Annotation]): Iterator[Result] = {
     val delim = "\\" + SuccinctAnnotationBuffer.DELIM
     val keyFilter = delim + annotClassFilter + delim + annotTypeFilter + delim
-    val buffers = annotBufferMap.filterKeys(_ matches keyFilter).values.toSeq
+    val kvs = annotBufferMap.filterKeys(_ matches keyFilter).toSeq
 
-    if (buffers.isEmpty) return Iterator[Result]()
+    if (kvs.isEmpty) return Iterator[Result]()
 
     implicit class IteratorWrapper[T](it: Iterator[T]) {
       def distinct = new Iterator[T] {
@@ -263,7 +263,7 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
 
     new Iterator[Result] {
       var seenSoFar = Set[Annotation]()
-      var curBufIdx = buffers.length - 1
+      var curBufIdx = kvs.length - 1
       var curAnnotIdx = -1
       var curRes: Result = null
       var curAnnots: Array[Annotation] = nextAnnots
@@ -275,13 +275,17 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
           var annotRecord: AnnotationRecord = null
           while (annotRecord == null) {
             curBufIdx += 1
-            if (curBufIdx == buffers.size) {
+            if (curBufIdx == kvs.size) {
               curBufIdx = 0
               curRes = if (it.hasNext) it.next() else null
               if (!hasNext) return null
             }
             val docIdOffset = findKey(curRes.docId)
-            annotRecord = buffers(curBufIdx).getAnnotationRecord(curRes.docId, docIdOffset)
+            val range = kvs(curBufIdx)._2
+            val keyFragments = kvs(curBufIdx)._1.replaceFirst("\\^", "").split("\\^")
+            val annotClass = keyFragments(0)
+            val annotType = keyFragments(1)
+            annotRecord = annotationBuffer.getAnnotationRecord(annotClass, annotType, curRes.docId, docIdOffset, range._1, range._2)
           }
           annots = op(annotRecord, curRes.startOffset, curRes.endOffset)
         }
@@ -411,12 +415,12 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
                     op: (AnnotationRecord, Int, Int) => Boolean): Iterator[Result] = {
     val delim = "\\" + SuccinctAnnotationBuffer.DELIM
     val keyFilter = delim + annotClassFilter + delim + annotTypeFilter + delim
-    val buffers = annotBufferMap.filterKeys(_ matches keyFilter).values.toSeq
+    val kvs = annotBufferMap.filterKeys(_ matches keyFilter).toSeq
 
-    if (buffers.isEmpty) return Iterator[Result]()
+    if (kvs.isEmpty) return Iterator[Result]()
 
     new Iterator[Result] {
-      var curBufIdx = buffers.length - 1
+      var curBufIdx = kvs.length - 1
       var curRes: Result = nextRes
 
       def nextRes: Result = {
@@ -425,13 +429,17 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
           var annotRecord: AnnotationRecord = null
           while (annotRecord == null) {
             curBufIdx += 1
-            if (curBufIdx == buffers.size) {
+            if (curBufIdx == kvs.size) {
               curBufIdx = 0
               curRes = if (it.hasNext) it.next() else null
               if (!hasNext) return null
             }
             val docIdOffset = findKey(curRes.docId)
-            annotRecord = buffers(curBufIdx).getAnnotationRecord(curRes.docId, docIdOffset)
+            val range = kvs(curBufIdx)._2
+            val keyFragments = kvs(curBufIdx)._1.replaceFirst("\\^", "").split("\\^")
+            val annotClass = keyFragments(0)
+            val annotType = keyFragments(1)
+            annotRecord = annotationBuffer.getAnnotationRecord(annotClass, annotType, curRes.docId, docIdOffset, range._1, range._2)
           }
           valid = op(annotRecord, curRes.startOffset, curRes.endOffset)
         }
@@ -715,12 +723,13 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
 
   def storageBreakdown(): String = {
     val keysSize = keys.map(_.length).sum
-    val docsSize = documentBuffer.getCompressedSize
-    val annotSize = annotBufferMap
-      .map(entry => entry._1 + " => (compressed) " + entry._2.getCompressedSize + " (original)" + entry._2.getOriginalSize)
-      .mkString("\n")
-
-    "keys: " + keysSize + "\ndocs: " + docsSize + "\n annots:\n" + annotSize
+    val docsSize = documentBuffer.getSize
+    val docsSizeCompresseed = documentBuffer.getCompressedSize
+    val annotSize = annotationBuffer.getOriginalSize
+    val annotSizeCompressed = annotationBuffer.getCompressedSize
+    "keys: " + keysSize +
+      "\tdocs: (compressed) " + docsSizeCompresseed + "(uncompressed) " + docsSize +
+      "\tannots: (compressed) " + annotSizeCompressed + " (uncompressed) " + annotSize
   }
 }
 
@@ -747,20 +756,14 @@ object AnnotatedSuccinctPartition {
     val pathAnnotToc = new Path(partitionLocation + ".sannots.toc")
     val pathAnnot = new Path(partitionLocation + ".sannots")
     val isAnnotToc = fs.open(pathAnnotToc)
-    val annotBufMap = Source.fromInputStream(isAnnotToc).getLines().map(_.split('\t'))
-      .map(e => (e(0), e(1).toLong, e(2).toLong))
+    val annotMap = Source.fromInputStream(isAnnotToc).getLines().map(_.split('\t'))
+      .map(e => (e(0), (e(1).toInt, e(2).toInt)))
       .filter(e => e._1 matches keyFilter)
-      .map(e => {
-        val key = e._1
-        val annotClass = key.split('^')(1)
-        val annotType = key.split('^')(2)
-        val isAnnot = fs.open(pathAnnot)
-        isAnnot.seek(e._2)
-        val buf = new SuccinctAnnotationBuffer(annotClass, annotType, isAnnot, e._3.toInt)
-        isAnnot.close()
-        (key, buf)
-      }).toMap
+      .toMap
+    val isAnnot = fs.open(pathAnnot)
+    val fileSize = fs.getFileStatus(pathAnnot).getLen.toInt
+    val annotationBuffer = new SuccinctAnnotationBuffer(isAnnot, fileSize)
 
-    new AnnotatedSuccinctPartition(keys, documentBuffer, annotBufMap)
+    new AnnotatedSuccinctPartition(keys, documentBuffer, annotationBuffer, annotMap)
   }
 }

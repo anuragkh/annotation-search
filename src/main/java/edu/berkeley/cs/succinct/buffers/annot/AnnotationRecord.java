@@ -10,9 +10,15 @@ public class AnnotationRecord {
   private int offset;
   private String docId;
   private int numEntries;
+  private String annotClass;
+  private String annotType;
   private SuccinctAnnotationBuffer buf;
 
-  public AnnotationRecord(int offset, String docId, int numEntries, SuccinctAnnotationBuffer buf) {
+  public AnnotationRecord(String annotClass, String annotType, int offset, String docId,
+    int numEntries, SuccinctAnnotationBuffer buf) {
+
+    this.annotClass = annotClass;
+    this.annotType = annotType;
     this.offset = offset;
     this.docId = docId;
     this.numEntries = numEntries;
@@ -43,7 +49,7 @@ public class AnnotationRecord {
    * @return The Annotation Class.
    */
   public String getAnnotClass() {
-    return buf.getAnnotClass();
+    return annotClass;
   }
 
   /**
@@ -52,7 +58,7 @@ public class AnnotationRecord {
    * @return The Annotation Type.
    */
   public String getAnnotType() {
-    return buf.getAnnotType();
+    return annotType;
   }
 
   /**
@@ -161,6 +167,7 @@ public class AnnotationRecord {
   public Iterator<Annotation> iterator() {
     return new Iterator<Annotation>() {
       private int curAnnotIdx = 0;
+
       @Override public boolean hasNext() {
         return curAnnotIdx < getNumEntries();
       }
