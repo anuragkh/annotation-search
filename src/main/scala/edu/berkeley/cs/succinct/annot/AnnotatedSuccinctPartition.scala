@@ -1,6 +1,6 @@
 package org.apache.spark.succinct.annot
 
-import java.io.{ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
+import java.io.{ObjectInputStream, ObjectOutputStream}
 import java.util.NoSuchElementException
 
 import edu.berkeley.cs.succinct.SuccinctIndexedFile
@@ -12,7 +12,6 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.util.{KnownSizeEstimation, SizeEstimator}
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
 
 class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: SuccinctIndexedFile,
@@ -461,7 +460,11 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
   def newAnnotationFilter(mFilter: String => Boolean,
                           tFilter: String => Boolean): AnnotationFilter = {
     class AnnotationFilterWrapper extends AnnotationFilter {
-      override def metadataFilter(metadata: String): Boolean = mFilter(metadata)
+
+      override def metadataFilter(metadata: String): Boolean = {
+        if (mFilter == null) true
+        else mFilter(metadata)
+      }
 
       override def textFilter(docId: String, startOffset: Int, endOffset: Int): Boolean = {
         if (tFilter == null) true
@@ -694,45 +697,6 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
         }
       case unknown => throw new UnsupportedOperationException(s"Operation $unknown not supported.")
     }
-  }
-
-  /**
-    * Adds new annotations for a specified annotation class and type. Overwrites old annotations
-    * for that class and type if there are any.
-    *
-    * @param annotClass        The annotation class.
-    * @param annotType         The annotation type.
-    * @param annotData         Seq of (documentId, annotationId, startOffset, endOffset,
-    *                          metadata) tuples to be added.
-    * @param ignoreParseErrors If true, ignores all parse errors; throws exception on error
-    *                          otherwise.
-    * @return Updated partition.
-    */
-  def addAnnotations(annotClass: String, annotType: String,
-                     annotData: Seq[(String, Int, Int, Int, String)],
-                     ignoreParseErrors: Boolean): AnnotatedSuccinctPartition = {
-
-    val docIdIndexes = new ArrayBuffer[Int]
-    val recordOffsets = new ArrayBuffer[Int]
-    val annotBufOS = new ByteArrayOutputStream()
-
-    annotData.groupBy(_._1).foreach(kv => {
-      val docIdIndex = findKey(kv._1)
-      if (docIdIndex < 0)
-        throw new scala.NoSuchElementException(s"Could not find document ID ${kv._1}")
-      val dat = kv._2.map(e => (e._2, e._3, e._4, e._5)).toArray
-      docIdIndexes.append(docIdIndex)
-      recordOffsets.append(annotBufOS.size())
-      val record = AnnotatedDocumentSerializer.serializeAnnotationRecord(dat, ignoreParseErrors)
-      annotBufOS.write(record)
-    })
-
-    val delim = SuccinctAnnotationBuffer.DELIM
-    val annotKey = delim + annotClass + delim + annotType + delim
-    val buf = new SuccinctAnnotationBuffer(annotClass, annotType, docIdIndexes.toArray,
-      recordOffsets.toArray, annotBufOS.toByteArray)
-
-    new AnnotatedSuccinctPartition(keys, documentBuffer, annotBufferMap + (annotKey -> buf))
   }
 
   /**
