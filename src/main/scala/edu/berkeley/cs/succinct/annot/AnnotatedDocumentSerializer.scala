@@ -94,6 +94,7 @@ class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean) extends Serializab
 
   def newAnnotData(key: String): (File, DataOutputStream) = {
     val tmpFile: File = File.createTempFile(key, "tmp")
+    tmpFile.deleteOnExit()
     val out: DataOutputStream = new DataOutputStream(new FileOutputStream(tmpFile))
     (tmpFile, out)
   }
