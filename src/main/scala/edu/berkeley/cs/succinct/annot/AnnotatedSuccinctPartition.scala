@@ -728,7 +728,7 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
     val annotSize = annotationBuffer.getOriginalSize
     val annotSizeCompressed = annotationBuffer.getCompressedSize
     "keys: " + keysSize +
-      "\tdocs: (compressed) " + docsSizeCompresseed + "(uncompressed) " + docsSize +
+      "\tdocs: (compressed) " + docsSizeCompresseed + " (uncompressed) " + docsSize + "(" +
       "\tannots: (compressed) " + annotSizeCompressed + " (uncompressed) " + annotSize
   }
 }
