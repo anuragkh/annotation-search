@@ -53,7 +53,7 @@ class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean) extends Serializab
         idx += 1
       }
       val endId = idx
-      annotationMap += (kv._1 -> (startId, endId))
+      annotationMap += (kv._1 ->(startId, endId))
       in.close()
       kv._2._1.delete()
     })
@@ -81,7 +81,8 @@ class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean) extends Serializab
   }
 
   def serializeAnnotationRecord(dat: Array[(Int, Int, Int, String)], out: DataOutputStream): Unit = {
-    val recordSize: Int = 4 + 14 * dat.length + dat.map(_._4.getBytes().length).sum
+    val recordSize: Int = 4 + 14 * dat.length +
+      dat.map(i => Math.min(i._4.getBytes().length, Short.MaxValue)).sum
     out.writeInt(recordSize)
     out.writeInt(dat.length)
     dat.map(_._2).foreach(i => out.writeInt(i))
