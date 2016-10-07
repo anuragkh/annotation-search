@@ -41,6 +41,8 @@ class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean) extends Serializab
         docIdOffsets(idx) = in.readInt()
         annotationOffsets(idx) = off
         val recSize = in.readInt()
+        if (recSize < 0 || recSize > Short.MaxValue)
+          throw new RuntimeException("idx = " + idx + " off = " + off + " Invalid record size = " + recSize)
         try {
           in.read(annotationBuffer, off, recSize)
         } catch {
@@ -81,8 +83,7 @@ class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean) extends Serializab
   }
 
   def serializeAnnotationRecord(dat: Array[(Int, Int, Int, String)], out: DataOutputStream): Unit = {
-    val recordSize: Int = 4 + 14 * dat.length +
-      dat.map(i => Math.min(i._4.getBytes().length, Short.MaxValue)).sum
+    val recordSize: Int = 4 + 14 * dat.length + dat.map(i => Math.min(i._4.length, Short.MaxValue)).sum
     out.writeInt(recordSize)
     out.writeInt(dat.length)
     dat.map(_._2).foreach(i => out.writeInt(i))
