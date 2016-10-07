@@ -41,7 +41,7 @@ class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean) extends Serializab
         docIdOffsets(idx) = in.readInt()
         annotationOffsets(idx) = off
         val recSize = in.readInt()
-        if (recSize < 0 || recSize > Short.MaxValue)
+        if (recSize < 0 || recSize > annotationBufferSize - off)
           throw new RuntimeException("idx = " + idx + " off = " + off + " Invalid record size = " + recSize)
         try {
           in.read(annotationBuffer, off, recSize)
