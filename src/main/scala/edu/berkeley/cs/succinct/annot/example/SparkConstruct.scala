@@ -6,11 +6,11 @@ import org.apache.hadoop.io._
 import org.apache.hadoop.mapred._
 import org.apache.spark.{SparkConf, SparkContext}
 
-object Construct {
+object SparkConstruct {
   def main(args: Array[String]): Unit = {
     val inputPath = args(0)
     val outputPath = args(0) + ".succinct"
-    val sc = new SparkContext(new SparkConf().setAppName("Construct"))
+    val sc = new SparkContext(new SparkConf().setAppName("SparkConstruct"))
     val rdd = sc.hadoopFile[Text, StringArrayWritable, SequenceFileInputFormat[Text, StringArrayWritable]](inputPath)
       .map(v => (v._1.toString, v._2.toStrings()(0), v._2.toStrings()(1)))
 
