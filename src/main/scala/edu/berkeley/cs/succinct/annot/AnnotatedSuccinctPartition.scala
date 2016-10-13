@@ -756,7 +756,7 @@ object AnnotatedSuccinctPartition {
         val annotType = key.split('^')(2)
         val isAnnot = fs.open(pathAnnot)
         isAnnot.seek(e._2)
-        val buf = new SuccinctAnnotationBuffer(annotClass, annotType, isAnnot, e._3.toInt)
+        val buf = new SuccinctAnnotationBuffer(annotClass, annotType, isAnnot)
         isAnnot.close()
         (key, buf)
       }).toMap

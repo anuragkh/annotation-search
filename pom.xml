@@ -37,7 +37,7 @@
     <scala.binary.version>2.10</scala.binary.version>
     <scalatest.version>2.2.6</scalatest.version>
     <junit.version>4.12</junit.version>
-    <succinct.version>0.1.7</succinct.version>
+    <succinct.version>0.1.8-SNAPSHOT</succinct.version>
     <spark.version>1.6.1</spark.version>
   </properties>
 

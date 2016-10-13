@@ -4,7 +4,6 @@ import edu.berkeley.cs.succinct.buffers.SuccinctIndexedFileBuffer;
 import edu.berkeley.cs.succinct.util.SuccinctConstants;
 
 import java.io.*;
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
@@ -13,14 +12,14 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
   private transient String annotClass;
   private transient String annotType;
   private transient int[] docIdIndexes;
-  private transient ByteBuffer readAnnotBuffer;
 
   /**
    * Constructor to initialize from input byte array.
    *
    * @param input The input byte array.
    */
-  public SuccinctAnnotationBuffer(String annotClass, String annotType, int[] docIdIndexes, int[] annotationOffsets, byte[] input) {
+  public SuccinctAnnotationBuffer(String annotClass, String annotType, int[] docIdIndexes,
+    int[] annotationOffsets, byte[] input) {
     super(input, annotationOffsets);
     this.annotClass = annotClass;
     this.annotType = annotType;
@@ -30,12 +29,11 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
   /**
    * Constructor to load the data from a DataInputStream with specified file size.
    *
-   * @param is       Input stream to load the data from
-   * @param fileSize Size of the file.
+   * @param is Input stream to load the data from
    */
-  public SuccinctAnnotationBuffer(String annotClass, String annotType, DataInputStream is, int fileSize) {
+  public SuccinctAnnotationBuffer(String annotClass, String annotType, DataInputStream is) {
     try {
-      readFromStream(is, fileSize);
+      readFromStream(is);
     } catch (IOException e) {
       e.printStackTrace();
     }
@@ -49,11 +47,7 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
    * @return The size of the Succinct compressed file.
    */
   @Override public int getCompressedSize() {
-    if (readAnnotBuffer != null) {
-      return readAnnotBuffer.capacity();
-    }
-    return super.getCompressedSize() + (12
-      + docIdIndexes.length * SuccinctConstants.INT_SIZE_BYTES);
+    return super.getCompressedSize() + docIdIndexes.length * SuccinctConstants.INT_SIZE_BYTES;
   }
 
   /**
@@ -158,27 +152,14 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
    * Read data from stream.
    *
    * @param is       Input stream to read from.
-   * @param fileSize The size of the file.
    * @throws IOException
    */
-  public void readFromStream(DataInputStream is, int fileSize) throws IOException {
-    byte[] data = new byte[fileSize];
-    is.readFully(data);
-    readAnnotBuffer = ByteBuffer.wrap(data);
-    mapFromBuffer(readAnnotBuffer);
-  }
-
-  /**
-   * Reads Succinct data structures from a ByteBuffer.
-   *
-   * @param buf ByteBuffer to read Succinct data structures from.
-   */
-  @Override public void mapFromBuffer(ByteBuffer buf) {
-    super.mapFromBuffer(buf);
-    int len = buf.getInt();
+  @Override public void readFromStream(DataInputStream is) throws IOException {
+    super.readFromStream(is);
+    int len = is.readInt();
     docIdIndexes = new int[len];
     for (int i = 0; i < docIdIndexes.length; i++) {
-      docIdIndexes[i] = buf.getInt();
+      docIdIndexes[i] = is.readInt();
     }
   }
 
