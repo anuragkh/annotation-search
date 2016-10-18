@@ -11,8 +11,8 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.succinct.annot.AnnotatedSuccinctPartition
 import org.apache.spark.{Dependency, Partition, SparkContext, TaskContext}
 
-abstract class AnnotatedSuccinctRDD(@transient sc: SparkContext,
-                                    @transient deps: Seq[Dependency[_]])
+abstract class AnnotatedSuccinctRDD(@transient private val sc: SparkContext,
+                                    @transient private val deps: Seq[Dependency[_]])
   extends RDD[(String, String)](sc, deps) {
 
   /**
