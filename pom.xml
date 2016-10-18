@@ -33,12 +33,12 @@
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <scala.version>2.10.4</scala.version>
-    <scala.binary.version>2.10</scala.binary.version>
+    <scala.version>2.11.7</scala.version>
+    <scala.binary.version>2.11</scala.binary.version>
     <scalatest.version>2.2.6</scalatest.version>
     <junit.version>4.12</junit.version>
-    <succinct.version>0.1.8-SNAPSHOT</succinct.version>
-    <spark.version>1.6.1</spark.version>
+    <succinct.version>0.1.8</succinct.version>
+    <spark.version>2.0.1</spark.version>
   </properties>
 
   <repositories>
