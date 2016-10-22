@@ -1,8 +1,10 @@
 package edu.berkeley.cs.succinct.annot
 
-import java.io.{ByteArrayOutputStream, DataOutputStream}
+import java.io._
 import java.net.URLDecoder
 import java.util.InvalidPropertiesFormatException
+
+import edu.berkeley.cs.succinct.util.SuccinctConstants
 
 import scala.collection.immutable.TreeMap
 import scala.collection.mutable.ArrayBuffer
@@ -13,8 +15,8 @@ class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean) extends Serializab
   var curDocTextOffset: Int = 0
   val docTextOffsets: ArrayBuffer[Int] = new ArrayBuffer[Int]
   val docTextOS: StringBuilder = new StringBuilder
-  var docAnnotDataMap: Map[String, (ArrayBuffer[Int], ArrayBuffer[Int], ByteArrayOutputStream)] = {
-    new TreeMap[String, (ArrayBuffer[Int], ArrayBuffer[Int], ByteArrayOutputStream)]()
+  var docAnnotationMap: Map[String, (File, DataOutputStream, File, DataOutputStream)] = {
+    new TreeMap[String, (File, DataOutputStream, File, DataOutputStream)]()
   }
 
   def getDocIds: Array[String] = docIds.toArray
@@ -22,7 +24,51 @@ class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean) extends Serializab
   def getTextBuffer: (Array[Int], Array[Char]) = (docTextOffsets.toArray, docTextOS.toArray)
 
   def getAnnotationBuffers: Map[String, (Array[Int], Array[Int], Array[Byte])] = {
-    docAnnotDataMap.mapValues(aData => (aData._1.toArray, aData._2.toArray, aData._3.toByteArray))
+    var annotationMap: Map[String, (Array[Int], Array[Int], Array[Byte])] =
+      new TreeMap[String, (Array[Int], Array[Int], Array[Byte])]()
+
+    docAnnotationMap.foreach(kv => {
+      kv._2._2.close()
+      kv._2._4.close()
+
+      val annotBufSize: Int = kv._2._3.length().toInt
+      val numAnnotRecs: Int = kv._2._1.length().toInt / (2 * SuccinctConstants.INT_SIZE_BYTES)
+
+      val in = new DataInputStream(new FileInputStream(kv._2._3))
+      val idxIn = new DataInputStream(new FileInputStream(kv._2._1))
+
+      val docIdIndexes = new Array[Int](numAnnotRecs)
+      val offsets = new Array[Int](numAnnotRecs)
+      val buffer = new Array[Byte](annotBufSize)
+      var off: Int = 0
+      var idx: Int = 0
+      while (in.available() > 0) {
+        docIdIndexes(idx) = idxIn.readInt()
+        val recSize = idxIn.readInt()
+        offsets(idx) = off
+        if (recSize < 0 || recSize > annotBufSize - off)
+          throw new RuntimeException("idx=" + idx + ",off=" + off + "; Invalid recSize= " + recSize)
+        try {
+          in.read(buffer, off, recSize)
+        } catch {
+          case e: Exception => {
+            val message = "recSize=" + recSize + ",off=" + off + ",maxOff=" + annotBufSize
+            throw new RuntimeException(message, e)
+          }
+        }
+        off += recSize
+        idx += 1
+      }
+      annotationMap += (kv._1 -> (docIdIndexes, offsets, buffer))
+
+      in.close()
+      idxIn.close()
+
+      kv._2._1.delete()
+      kv._2._3.delete()
+    })
+
+    annotationMap
   }
 
   def serialize(it: Iterator[(String, String, String)]): Unit = {
@@ -44,10 +90,12 @@ class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean) extends Serializab
     (annotKey, (annotId, startOffset, endOffset, metadata))
   }
 
-  def serializeAnnotationRecord(dat: Array[(Int, Int, Int, String)],
-                                baos: ByteArrayOutputStream): Unit = {
-    val out = new DataOutputStream(baos)
+  def annotationRecordSize(dat: Array[(Int, Int, Int, String)]): Int = {
+    4 + 14 * dat.length + dat.map(i => Math.min(i._4.length, Short.MaxValue)).sum
+  }
 
+  def serializeAnnotationRecord(dat: Array[(Int, Int, Int, String)],
+                                out: DataOutputStream): Unit = {
     out.writeInt(dat.length)
     dat.map(_._2).foreach(i => out.writeInt(i))
     dat.map(_._3).foreach(i => out.writeInt(i))
@@ -62,19 +110,26 @@ class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean) extends Serializab
     out.flush()
   }
 
-  def newAnnotData: (ArrayBuffer[Int], ArrayBuffer[Int], ByteArrayOutputStream) = {
-    (new ArrayBuffer[Int], new ArrayBuffer[Int], new ByteArrayOutputStream())
+  def newAnnotationEntry(key: String): (File, DataOutputStream, File, DataOutputStream) = {
+    val tmpDataFile: File = File.createTempFile(key.replace('^', '-'), "tmp-data")
+    val tmpIdxFile: File = File.createTempFile(key.replace('^', '-'), "tmp-idx")
+    tmpDataFile.deleteOnExit()
+    tmpIdxFile.deleteOnExit()
+    val outData = new DataOutputStream(new FileOutputStream(tmpDataFile))
+    val outIdx = new DataOutputStream(new FileOutputStream(tmpIdxFile))
+    (tmpIdxFile, outIdx, tmpDataFile, outData)
   }
 
   def addAnnotations(docIdOffset: Int, docAnnotation: String): Unit = {
     docAnnotation.split('\n').map(decodeAnnotationString).groupBy(_._1)
       .foreach(kv => {
-        if (!docAnnotDataMap.contains(kv._1))
-          docAnnotDataMap += (kv._1 -> newAnnotData)
-        val annotData = docAnnotDataMap(kv._1)
-        annotData._1.append(docIdOffset)
-        annotData._2.append(annotData._3.size())
-        serializeAnnotationRecord(kv._2.map(_._2).sortBy(_._2), annotData._3)
+        if (!docAnnotationMap.contains(kv._1))
+          docAnnotationMap += (kv._1 -> newAnnotationEntry(kv._1))
+        val annotEntry = docAnnotationMap(kv._1)
+        val dat = kv._2.map(_._2).sortBy(_._2)
+        annotEntry._2.writeInt(docIdOffset)
+        annotEntry._2.writeInt(annotationRecordSize(dat))
+        serializeAnnotationRecord(dat, annotEntry._4)
       })
   }
 
