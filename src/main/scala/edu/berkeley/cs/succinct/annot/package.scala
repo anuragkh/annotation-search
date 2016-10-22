@@ -25,7 +25,7 @@ package object annot {
     }
 
     def saveAsAnnotatedSuccinctFile(path: String, conf: Configuration = new Configuration()): Unit = {
-      AnnotatedSuccinctRDD(rdd).save(path, conf)
+      AnnotatedSuccinctRDD.construct(rdd, path, conf)
     }
   }
 
