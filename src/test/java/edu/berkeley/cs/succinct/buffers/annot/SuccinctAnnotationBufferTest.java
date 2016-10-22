@@ -4,10 +4,7 @@ import edu.berkeley.cs.succinct.SuccinctIndexedFile;
 import edu.berkeley.cs.succinct.buffers.SuccinctIndexedFileBuffer;
 import junit.framework.TestCase;
 
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.*;
 import java.util.Arrays;
 
 public class SuccinctAnnotationBufferTest extends TestCase {
@@ -321,6 +318,29 @@ public class SuccinctAnnotationBufferTest extends TestCase {
     assertEquals(buf.getNumRecords(), sIFileRead.getNumRecords());
     for (int i = 0; i < buf.getNumRecords(); i++) {
       assertTrue(Arrays.equals(buf.getRecordBytes(i), sIFileRead.getRecordBytes(i)));
+    }
+  }
+
+  /**
+   * Test method: void construct(int[] docIdIdx, int[] offsets, byte[] input, DataOutputStream os)
+   *
+   * @throws Exception
+   */
+  public void testConstruct() throws Exception {
+    FileOutputStream fos = new FileOutputStream(testOutput);
+    DataOutputStream os = new DataOutputStream(fos);
+    SuccinctAnnotationBuffer.construct(test, aOffsets, docIdIndexes, os);
+    os.close();
+
+    // Deserialize data
+    FileInputStream fIn = new FileInputStream(testOutput);
+    DataInputStream in = new DataInputStream(fIn);
+    SuccinctAnnotationBuffer annotationBuffer = new SuccinctAnnotationBuffer("ge", "word", in);
+
+    assertNotNull(annotationBuffer);
+    assertEquals(buf.getNumRecords(), annotationBuffer.getNumRecords());
+    for (int i = 0; i < buf.getNumRecords(); i++) {
+      assertTrue(Arrays.equals(buf.getRecordBytes(i), annotationBuffer.getRecordBytes(i)));
     }
   }
 }

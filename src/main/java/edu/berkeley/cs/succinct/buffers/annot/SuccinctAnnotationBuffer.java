@@ -16,7 +16,11 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
   /**
    * Constructor to initialize from input byte array.
    *
-   * @param input The input byte array.
+   * @param annotClass        The annotation class of the buffer.
+   * @param annotType         The annotation type of the buffer.
+   * @param docIdIndexes      The document ID indexes (pointers into array containing docIds).
+   * @param annotationOffsets Offsets to annotation records in the byte array.
+   * @param input             The input byte array.
    */
   public SuccinctAnnotationBuffer(String annotClass, String annotType, int[] docIdIndexes,
     int[] annotationOffsets, byte[] input) {
@@ -39,6 +43,23 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
     }
     this.annotClass = annotClass;
     this.annotType = annotType;
+  }
+
+  /**
+   * Construct SuccinctAnnotationBuffer from input parameters and write to output stream.
+   *
+   * @param input        The input byte array.
+   * @param offsets      Offsets to annotation records in the byte array.
+   * @param docIdIndexes The document ID indexes (pointers into array containing docIds).
+   * @param os           The data output stream to write the data to.
+   */
+  public static void construct(byte[] input, int[] offsets, int[] docIdIndexes, DataOutputStream os)
+    throws IOException {
+    construct(input, offsets, os);
+    os.writeInt(docIdIndexes.length);
+    for (int i = 0; i < docIdIndexes.length; i++) {
+      os.writeInt(docIdIndexes[i]);
+    }
   }
 
   /**
@@ -151,7 +172,7 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
   /**
    * Read data from stream.
    *
-   * @param is       Input stream to read from.
+   * @param is Input stream to read from.
    * @throws IOException
    */
   @Override public void readFromStream(DataInputStream is) throws IOException {
