@@ -8,13 +8,13 @@ import org.apache.spark.sql.SparkSession
 package object annot {
 
   implicit class SuccinctContext(sc: SparkContext) {
-    def annotatedSuccinctFile(filePath: String, annotClassFilter: String, annotTypeFilter: String): AnnotatedSuccinctRDD = {
+    def annotatedSuccinctFile(filePath: String, annotClassFilter: String = ".*", annotTypeFilter: String = ".*"): AnnotatedSuccinctRDD = {
       AnnotatedSuccinctRDD(sc, filePath, annotClassFilter, annotTypeFilter)
     }
   }
 
   implicit class SuccinctSession(spark: SparkSession) {
-    def annotatedSuccinctFile(filePath: String, annotClassFilter: String, annotTypeFilter: String): AnnotatedSuccinctRDD = {
+    def annotatedSuccinctFile(filePath: String, annotClassFilter: String = ".*", annotTypeFilter: String = ".*"): AnnotatedSuccinctRDD = {
       AnnotatedSuccinctRDD(spark.sparkContext, filePath, annotClassFilter, annotTypeFilter)
     }
   }
@@ -24,7 +24,7 @@ package object annot {
       AnnotatedSuccinctRDD(rdd)
     }
 
-    def saveAsSuccinctFile(path: String, conf: Configuration = new Configuration()): Unit = {
+    def saveAsAnnotatedSuccinctFile(path: String, conf: Configuration = new Configuration()): Unit = {
       AnnotatedSuccinctRDD(rdd).save(path, conf)
     }
   }
