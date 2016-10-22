@@ -761,4 +761,20 @@ class AnnotatedSuccinctRDDSuite extends FunSuite with LocalSparkContext {
 
     assert(originalData === newData)
   }
+
+  test("Test construct and load") {
+    sc = new SparkContext(conf)
+
+    val annotatedRDD = sc.parallelize(data)
+    val tmpDir = Files.createTempDir()
+    val succinctDir = tmpDir + "/succinct"
+    AnnotatedSuccinctRDD.construct(annotatedRDD, succinctDir)
+
+    val reloadedRDD = AnnotatedSuccinctRDD(sc, succinctDir)
+
+    val originalData = AnnotatedSuccinctRDD(annotatedRDD).collect()
+    val newData = reloadedRDD.collect()
+
+    assert(originalData === newData)
+  }
 }

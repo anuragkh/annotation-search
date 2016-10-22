@@ -1,5 +1,6 @@
 package edu.berkeley.cs.succinct.annot
 
+import java.io.ObjectOutputStream
 import java.util.Properties
 
 import edu.berkeley.cs.succinct.annot.impl.AnnotatedSuccinctRDDImpl
@@ -153,6 +154,90 @@ object AnnotatedSuccinctRDD {
     val partitionsRDD = inputRDD.sortBy(_._1)
       .mapPartitionsWithIndex((idx, it) => createAnnotatedSuccinctPartition(it, ignoreParseErrors)).cache()
     new AnnotatedSuccinctRDDImpl(partitionsRDD)
+  }
+
+  /**
+    * Constructs and writes the [[AnnotatedSuccinctRDD]] to given output path.
+    *
+    * @param inputRDD          RDD of (documentID, documentText, annotations) triplets.
+    * @param location          Output path for the data.
+    * @param ignoreParseErrors Ignores errors in parsing annotations if set to true;
+    *                          throws an exception on error otherwise.
+    */
+  def construct(inputRDD: RDD[(String, String, String)], location: String,
+                conf: Configuration = new Configuration(), ignoreParseErrors: Boolean = true) {
+
+    val path = new Path(location)
+    val fs = FileSystem.get(path.toUri, conf)
+    if (!fs.exists(path)) {
+      fs.mkdirs(path)
+    }
+
+    val it = conf.iterator()
+    val properties = new Properties()
+    while (it.hasNext) {
+      val entry = it.next()
+      properties.setProperty(entry.getKey, entry.getValue)
+    }
+
+    inputRDD.sortBy(_._1).mapPartitionsWithIndex((i, it) => Iterator((i, it))).foreach(part => {
+      val i = part._1
+      val it = part._2
+      val serializer = new AnnotatedDocumentSerializer(ignoreParseErrors)
+      serializer.serialize(it)
+
+      val docIds = serializer.getDocIds
+      val docTextBuffer = serializer.getTextBuffer
+      val succinctDocTextBuffer = new SuccinctIndexedFileBuffer(docTextBuffer._2, docTextBuffer._1)
+      val succinctAnnotBufferMap = serializer.getAnnotationBuffers.map(kv => {
+        val key = kv._1
+        val annotClass = key.split('^')(1)
+        val annotType = key.split('^')(2)
+        (key, new SuccinctAnnotationBuffer(annotClass, annotType, kv._2._1, kv._2._2, kv._2._3))
+      })
+
+      val partitionLocation = location.stripSuffix("/") + "/part-" + "%05d".format(i)
+      val pathDoc = new Path(partitionLocation + ".sdocs")
+      val pathDocIds = new Path(partitionLocation + ".sdocids")
+
+      val localConf = new Configuration()
+      val propIt = properties.entrySet().iterator()
+      while (propIt.hasNext) {
+        val entry = propIt.next()
+        val propName = entry.getKey.asInstanceOf[String]
+        val propValue = entry.getValue.asInstanceOf[String]
+        localConf.set(propName, propValue)
+      }
+
+      val fsLocal = FileSystem.get(pathDoc.toUri, localConf)
+
+      val osDoc = fsLocal.create(pathDoc)
+      val osDocIds = new ObjectOutputStream(fsLocal.create(pathDocIds))
+
+      succinctDocTextBuffer.writeToStream(osDoc)
+      osDocIds.writeObject(docIds)
+
+      osDoc.close()
+      osDocIds.close()
+
+      // Write annotation buffers
+      val pathAnnotToc = new Path(partitionLocation + ".sannots.toc")
+      val pathAnnot = new Path(partitionLocation + ".sannots")
+      val osAnnotToc = fsLocal.create(pathAnnotToc)
+      val osAnnot = fsLocal.create(pathAnnot)
+      succinctAnnotBufferMap.foreach(kv => {
+        val key = kv._1
+        val buf = kv._2
+        val startPos = osAnnot.getPos
+        buf.writeToStream(osAnnot)
+        val endPos = osAnnot.getPos
+        val size = endPos - startPos
+        // Add entry to TOC
+        osAnnotToc.writeBytes(s"$key\t$startPos\t$size\n")
+      })
+      osAnnotToc.close()
+      osAnnot.close()
+    })
   }
 
   /**
