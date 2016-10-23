@@ -1,6 +1,6 @@
 package edu.berkeley.cs.succinct.annot
 
-import java.io.ObjectOutputStream
+import java.io.{File, ObjectOutputStream}
 import java.util.Properties
 
 import edu.berkeley.cs.succinct.annot.impl.AnnotatedSuccinctRDDImpl
@@ -167,6 +167,13 @@ object AnnotatedSuccinctRDD {
   def construct(inputRDD: RDD[(String, String, String)], location: String,
                 conf: Configuration = new Configuration(), ignoreParseErrors: Boolean = true) {
 
+    // Obtain temp directory
+    val dirs = inputRDD.sparkContext.getConf
+      .get("spark.local.dir", System.getProperty("java.io.tmpdir")).split(",")
+
+    println("Using temporary directory: ", dirs(0))
+    val tmpDir = new File(dirs(0))
+
     val path = new Path(location)
     val fs = FileSystem.get(path.toUri, conf)
     if (!fs.exists(path)) {
@@ -183,7 +190,7 @@ object AnnotatedSuccinctRDD {
     inputRDD.sortBy(_._1).mapPartitionsWithIndex((i, it) => Iterator((i, it))).foreach(part => {
       val i = part._1
       val it = part._2
-      val serializer = new AnnotatedDocumentSerializer(ignoreParseErrors)
+      val serializer = new AnnotatedDocumentSerializer(ignoreParseErrors, tmpDir)
       serializer.serialize(it)
 
       val docIds = serializer.getDocIds

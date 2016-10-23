@@ -9,7 +9,9 @@ import edu.berkeley.cs.succinct.util.SuccinctConstants
 import scala.collection.immutable.TreeMap
 import scala.collection.mutable.ArrayBuffer
 
-class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean) extends Serializable {
+class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean = true,
+                                  tempDir: File = new File(System.getProperty("java.io.tmpdir")))
+  extends Serializable {
 
   val docIds: ArrayBuffer[String] = new ArrayBuffer[String]
   var curDocTextOffset: Int = 0
@@ -59,7 +61,7 @@ class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean) extends Serializab
         off += recSize
         idx += 1
       }
-      annotationMap += (kv._1 -> (docIdIndexes, offsets, buffer))
+      annotationMap += (kv._1 ->(docIdIndexes, offsets, buffer))
 
       in.close()
       idxIn.close()
@@ -111,7 +113,7 @@ class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean) extends Serializab
   }
 
   def newAnnotationEntry(key: String): (File, DataOutputStream, File, DataOutputStream) = {
-    val tmpDataFile: File = File.createTempFile(key.replace('^', '-'), "tmp-data")
+    val tmpDataFile: File = File.createTempFile(key.replace('^', '-'), "tmp-data", tempDir)
     val tmpIdxFile: File = File.createTempFile(key.replace('^', '-'), "tmp-idx")
     tmpDataFile.deleteOnExit()
     tmpIdxFile.deleteOnExit()
