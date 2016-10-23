@@ -184,17 +184,24 @@ object AnnotatedSuccinctRDD {
       val i = part._1
       val it = part._2
       val serializer = new AnnotatedDocumentSerializer(ignoreParseErrors)
+      val startTime = System.currentTimeMillis()
       serializer.serialize(it)
+      val endTime = System.currentTimeMillis()
+      println("Serialization time: " + (endTime - startTime) / 1000)
 
       val docIds = serializer.getDocIds
       val docTextBuffer = serializer.getTextBuffer
       val succinctDocTextBuffer = new SuccinctIndexedFileBuffer(docTextBuffer._2, docTextBuffer._1)
+
+      val startTime2 = System.currentTimeMillis()
       val succinctAnnotBufferMap = serializer.getAnnotationBuffers.map(kv => {
         val key = kv._1
         val annotClass = key.split('^')(1)
         val annotType = key.split('^')(2)
         (key, new SuccinctAnnotationBuffer(annotClass, annotType, kv._2._1, kv._2._2, kv._2._3))
       })
+      val endTime2 = System.currentTimeMillis()
+      println("Construction time: " + (endTime2 - startTime2) / 1000)
 
       val partitionLocation = location.stripSuffix("/") + "/part-" + "%05d".format(i)
       val pathDoc = new Path(partitionLocation + ".sdocs")
