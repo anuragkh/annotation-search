@@ -8,7 +8,6 @@ JAR_PATH=`ls $bin/../target/annotation-search-*-jar-with-dependencies.jar`
 $SPARK_HOME/bin/spark-submit \
   --class edu.berkeley.cs.succinct.annot.example.SparkConstruct \
   --master spark://${hostname}:7077 \
-  --executor-cores 1 \
   $JAR_PATH \
   $@
 
