@@ -183,30 +183,16 @@ object AnnotatedSuccinctRDD {
     inputRDD.sortBy(_._1).mapPartitionsWithIndex((i, it) => Iterator((i, it))).foreach(part => {
       val i = part._1
       val it = part._2
+
+      /* Serialize partition */
+      val serStartTime = System.currentTimeMillis()
       val serializer = new AnnotatedDocumentSerializer(ignoreParseErrors)
-      val startTime = System.currentTimeMillis()
       serializer.serialize(it)
-      val endTime = System.currentTimeMillis()
-      println("Serialization time: " + (endTime - startTime) / 1000)
+      val serEndTime = System.currentTimeMillis()
+      println("Partition " + i + ": Serialization time: " + (serEndTime - serStartTime) + "ms")
 
-      val docIds = serializer.getDocIds
-      val docTextBuffer = serializer.getTextBuffer
-      val succinctDocTextBuffer = new SuccinctIndexedFileBuffer(docTextBuffer._2, docTextBuffer._1)
-
-      val startTime2 = System.currentTimeMillis()
-      val succinctAnnotBufferMap = serializer.getAnnotationBuffers.map(kv => {
-        val key = kv._1
-        val annotClass = key.split('^')(1)
-        val annotType = key.split('^')(2)
-        (key, new SuccinctAnnotationBuffer(annotClass, annotType, kv._2._1, kv._2._2, kv._2._3))
-      })
-      val endTime2 = System.currentTimeMillis()
-      println("Construction time: " + (endTime2 - startTime2) / 1000)
-
+      /* Obtain configuration parameters. */
       val partitionLocation = location.stripSuffix("/") + "/part-" + "%05d".format(i)
-      val pathDoc = new Path(partitionLocation + ".sdocs")
-      val pathDocIds = new Path(partitionLocation + ".sdocids")
-
       val localConf = new Configuration()
       val propIt = properties.entrySet().iterator()
       while (propIt.hasNext) {
@@ -215,35 +201,49 @@ object AnnotatedSuccinctRDD {
         val propValue = entry.getValue.asInstanceOf[String]
         localConf.set(propName, propValue)
       }
+      val fsLocal = FileSystem.get(new Path(partitionLocation).toUri, localConf)
 
-      val fsLocal = FileSystem.get(pathDoc.toUri, localConf)
-
-      val osDoc = fsLocal.create(pathDoc)
+      /* Write docIds to persistent store */
+      val per1StartTime = System.currentTimeMillis()
+      val docIds = serializer.getDocIds
+      val pathDocIds = new Path(partitionLocation + ".sdocids")
       val osDocIds = new ObjectOutputStream(fsLocal.create(pathDocIds))
-
-      succinctDocTextBuffer.writeToStream(osDoc)
       osDocIds.writeObject(docIds)
-
-      osDoc.close()
       osDocIds.close()
+      val per1EndTime = System.currentTimeMillis()
+      println("Partition " + i + ": Doc. ids persist time: " + (per1EndTime - per1StartTime) + "ms")
 
-      // Write annotation buffers
+      /* Write Succinct docTextBuffer to persistent store */
+      val per2StartTime = System.currentTimeMillis()
+      val docTextBuffer = serializer.getTextBuffer
+      val pathDoc = new Path(partitionLocation + ".sdocs")
+      val osDoc = fsLocal.create(pathDoc)
+      SuccinctIndexedFileBuffer.construct(docTextBuffer._2, docTextBuffer._1, osDoc)
+      osDoc.close()
+      val per2EndTime = System.currentTimeMillis()
+      println("Partition " + i + ": Doc. txt index time: " + (per2EndTime - per2StartTime) + "ms")
+
+      /* Write Succinct annotationBuffers to persistent store */
+      val per3StartTime = System.currentTimeMillis()
       val pathAnnotToc = new Path(partitionLocation + ".sannots.toc")
       val pathAnnot = new Path(partitionLocation + ".sannots")
       val osAnnotToc = fsLocal.create(pathAnnotToc)
       val osAnnot = fsLocal.create(pathAnnot)
-      succinctAnnotBufferMap.foreach(kv => {
+      serializer.getAnnotationBuffers.foreach(kv => {
         val key = kv._1
-        val buf = kv._2
         val startPos = osAnnot.getPos
-        buf.writeToStream(osAnnot)
+        // Write Succinct annotationBuffer to persistent store.
+        SuccinctAnnotationBuffer.construct(kv._2._3, kv._2._2, kv._2._1, osAnnot)
         val endPos = osAnnot.getPos
         val size = endPos - startPos
+
         // Add entry to TOC
         osAnnotToc.writeBytes(s"$key\t$startPos\t$size\n")
       })
       osAnnotToc.close()
       osAnnot.close()
+      val per3EndTime = System.currentTimeMillis()
+      println("Partition " + i + ": Annotation index time: " + (per3EndTime - per3StartTime) + "ms")
     })
   }
 
