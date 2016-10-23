@@ -9,8 +9,7 @@ import edu.berkeley.cs.succinct.util.container.IntArrayList
 import scala.collection.immutable.TreeMap
 import scala.collection.mutable.ArrayBuffer
 
-class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean = true,
-                                  tempDir: File = new File(System.getProperty("java.io.tmpdir")))
+class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean = true)
   extends Serializable {
 
   val docIds: ArrayBuffer[String] = new ArrayBuffer[String]
