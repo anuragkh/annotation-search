@@ -1,4 +1,4 @@
-package edu.berkeley.cs.succinct.buffers.annot.example;
+package edu.berkeley.cs.succinct.buffers.annot.examples;
 
 import com.elsevier.cat.StringArrayWritable;
 import org.apache.hadoop.conf.Configuration;
