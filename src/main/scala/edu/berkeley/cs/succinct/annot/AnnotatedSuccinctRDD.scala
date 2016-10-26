@@ -148,7 +148,7 @@ object AnnotatedSuccinctRDD {
   private def getConstructionConf(sc: SparkContext): (Boolean, File) = {
     val inMemory = sc.getConf.get("succinct.construct.inmemory", "true").toBoolean
     val dirs = sc.getConf.get("spark.local.dir", System.getProperty("java.io.tmpdir")).split(",")
-    println("Temp Dir: " + dirs(0))
+    println("In-memory: " + inMemory + "Temp Dir: " + dirs(0))
     (inMemory, new File(dirs(0)))
   }
 
