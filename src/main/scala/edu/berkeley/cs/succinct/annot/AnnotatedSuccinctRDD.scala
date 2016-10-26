@@ -232,7 +232,8 @@ object AnnotatedSuccinctRDD {
       val docTextBuffer = serializer.getTextBuffer
       val pathDoc = new Path(partitionLocation + ".sdocs")
       val osDoc = fsLocal.create(pathDoc)
-      SuccinctIndexedFileBuffer.construct(docTextBuffer._2, docTextBuffer._1, osDoc)
+      val docBuf = new SuccinctIndexedFileBuffer(docTextBuffer._2, docTextBuffer._1)
+      docBuf.writeToStream(osDoc)
       osDoc.close()
       val per2EndTime = System.currentTimeMillis()
       println("Partition " + i + ": Doc. txt (" + docTextBuffer._2.length / (1024 * 1024)
@@ -251,7 +252,8 @@ object AnnotatedSuccinctRDD {
 
         // Write Succinct annotationBuffer to persistent store.
         val buffers = kv._2.read
-        SuccinctAnnotationBuffer.construct(buffers._3, buffers._2, buffers._1, osAnnot)
+        val annotBuf = new SuccinctAnnotationBuffer("", "", buffers._1, buffers._2, buffers._3)
+        annotBuf.writeToStream(osAnnot)
         totAnnotBytes += buffers._3.length
         val endPos = osAnnot.getPos
         val size = endPos - startPos
