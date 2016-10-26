@@ -1,6 +1,6 @@
 package edu.berkeley.cs.succinct.annot
 
-import java.io.ObjectOutputStream
+import java.io.{File, ObjectOutputStream}
 import java.util.Properties
 
 import edu.berkeley.cs.succinct.annot.impl.AnnotatedSuccinctRDDImpl
@@ -143,6 +143,12 @@ abstract class AnnotatedSuccinctRDD(@transient private val sc: SparkContext,
 }
 
 object AnnotatedSuccinctRDD {
+
+  private def getTemDir(sc: SparkContext): File = {
+    val dirs = sc.getConf.get("spark.local.dir", System.getProperty("java.io.tmpdir")).split(",")
+    new File(dirs(0))
+  }
+
   /**
     * Creates an [[AnnotatedSuccinctRDD]] from an RDD of triplets (documentID, documentText, annotations).
     *
@@ -151,8 +157,11 @@ object AnnotatedSuccinctRDD {
     * @return The [[AnnotatedSuccinctRDD]].
     */
   def apply(inputRDD: RDD[(String, String, String)], ignoreParseErrors: Boolean = true): AnnotatedSuccinctRDD = {
+    val tmpDir = getTemDir(inputRDD.sparkContext)
     val partitionsRDD = inputRDD.sortBy(_._1)
-      .mapPartitionsWithIndex((idx, it) => createAnnotatedSuccinctPartition(it, ignoreParseErrors)).cache()
+      .mapPartitionsWithIndex((idx, it) => {
+        createAnnotatedSuccinctPartition(it, ignoreParseErrors, tmpDir)
+      }).cache()
     new AnnotatedSuccinctRDDImpl(partitionsRDD)
   }
 
@@ -180,13 +189,15 @@ object AnnotatedSuccinctRDD {
       properties.setProperty(entry.getKey, entry.getValue)
     }
 
+    val tmpDir = getTemDir(inputRDD.sparkContext)
+
     inputRDD.sortBy(_._1).mapPartitionsWithIndex((i, it) => Iterator((i, it))).foreach(part => {
       val i = part._1
       val it = part._2
 
       /* Serialize partition */
       val serStartTime = System.currentTimeMillis()
-      val serializer = new AnnotatedDocumentSerializer(ignoreParseErrors)
+      val serializer = new AnnotatedDocumentSerializer(ignoreParseErrors, tmpDir)
       serializer.serialize(it)
       val serEndTime = System.currentTimeMillis()
       println("Partition " + i + ": Serialization time: " + (serEndTime - serStartTime) + "ms")
@@ -231,12 +242,14 @@ object AnnotatedSuccinctRDD {
       val osAnnotToc = fsLocal.create(pathAnnotToc)
       val osAnnot = fsLocal.create(pathAnnot)
       var totAnnotBytes = 0
-      serializer.getAnnotationBuffers.foreach(kv => {
+      serializer.getAnnotationMap.foreach(kv => {
         val key = kv._1
         val startPos = osAnnot.getPos
+
         // Write Succinct annotationBuffer to persistent store.
-        SuccinctAnnotationBuffer.construct(kv._2._3, kv._2._2, kv._2._1, osAnnot)
-        totAnnotBytes += kv._2._3.length
+        val buffers = kv._2.read
+        SuccinctAnnotationBuffer.construct(buffers._3, buffers._2, buffers._1, osAnnot)
+        totAnnotBytes += buffers._3.length
         val endPos = osAnnot.getPos
         val size = endPos - startPos
 
@@ -289,13 +302,17 @@ object AnnotatedSuccinctRDD {
   }
 
   /**
-    * Creates an [[AnnotatedSuccinctPartition]] from a collection of (documentID, documentText, annotations) triplets.
+    * Creates an [[AnnotatedSuccinctPartition]] from a collection of (documentID, documentText,
+    * annotations) triplets.
     *
     * @param dataIter          An iterator over (documentID, documentText, annotations) triplets.
-    * @param ignoreParseErrors Ignores errors in parsing annotations if set to true; throws an exception on error otherwise.
+    * @param ignoreParseErrors Ignores errors in parsing annotations if set to true; throws an
+    *                          exception on error otherwise.
+    * @param tmpDir            Temporary directory used for writing files during index construction.
     * @return An iterator over [[AnnotatedSuccinctPartition]]
     */
-  def createAnnotatedSuccinctPartition(dataIter: Iterator[(String, String, String)], ignoreParseErrors: Boolean):
+  def createAnnotatedSuccinctPartition(dataIter: Iterator[(String, String, String)],
+                                       ignoreParseErrors: Boolean, tmpDir: File):
   Iterator[AnnotatedSuccinctPartition] = {
     val serializer = new AnnotatedDocumentSerializer(ignoreParseErrors)
     serializer.serialize(dataIter)
@@ -303,11 +320,12 @@ object AnnotatedSuccinctRDD {
     val docIds = serializer.getDocIds
     val docTextBuffer = serializer.getTextBuffer
     val succinctDocTextBuffer = new SuccinctIndexedFileBuffer(docTextBuffer._2, docTextBuffer._1)
-    val succinctAnnotBufferMap = serializer.getAnnotationBuffers.map(kv => {
+    val succinctAnnotBufferMap = serializer.getAnnotationMap.map(kv => {
       val key = kv._1
       val annotClass = key.split('^')(1)
       val annotType = key.split('^')(2)
-      (key, new SuccinctAnnotationBuffer(annotClass, annotType, kv._2._1, kv._2._2, kv._2._3))
+      val buffers = kv._2.read
+      (key, new SuccinctAnnotationBuffer(annotClass, annotType, buffers._1, buffers._2, buffers._3))
     })
     Iterator(new AnnotatedSuccinctPartition(docIds, succinctDocTextBuffer, succinctAnnotBufferMap))
   }

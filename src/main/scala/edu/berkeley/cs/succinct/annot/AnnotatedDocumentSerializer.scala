@@ -4,47 +4,84 @@ import java.io._
 import java.net.URLDecoder
 import java.util.InvalidPropertiesFormatException
 
-import edu.berkeley.cs.succinct.util.container.IntArrayList
+import edu.berkeley.cs.succinct.util.SuccinctConstants
 
 import scala.collection.immutable.TreeMap
 import scala.collection.mutable.ArrayBuffer
 
-class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean = true)
+class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean = true,
+                                  tempDir: File = new File(System.getProperty("java.io.tmpdir")))
   extends Serializable {
+
+  class TempAnnotationFiles(key: String, tmpDir: File) {
+    val bufFile: File = File.createTempFile(key.replace('^', '-'), "tmp-buf", tempDir)
+    bufFile.deleteOnExit()
+    val outBuf = new DataOutputStream(new FileOutputStream(bufFile))
+
+    val offsetsFile: File = File.createTempFile(key.replace('^', '-'), "tmp-off")
+    offsetsFile.deleteOnExit()
+    val outOffsets = new DataOutputStream(new FileOutputStream(offsetsFile))
+
+    val docIdIdxFile: File = File.createTempFile(key.replace('^', '-'), "tmp-dir")
+    docIdIdxFile.deleteOnExit()
+    val outDocIdIdx = new DataOutputStream(new FileOutputStream(docIdIdxFile))
+
+    def bufStream: DataOutputStream = outBuf
+
+    def offsetsStream: DataOutputStream = outOffsets
+
+    def docIdIdxStream: DataOutputStream = outDocIdIdx
+
+    private def readIntArrayFromFile(file: File): Array[Int] = {
+      val arr = new Array[Int](file.length().toInt / SuccinctConstants.INT_SIZE_BYTES)
+      val in = new DataInputStream(new FileInputStream(file))
+      for (i <- arr.indices) {
+        arr(i) = in.readInt()
+      }
+      arr
+    }
+
+    private def readByteArrayFromFile(file: File): Array[Byte] = {
+      val arr = new Array[Byte](file.length().toInt)
+      new DataInputStream(new FileInputStream(file)).readFully(arr)
+      arr
+    }
+
+    def read: (Array[Int], Array[Int], Array[Byte]) = {
+      val docIdIndexes = readIntArrayFromFile(docIdIdxFile)
+      val offsets = readIntArrayFromFile(offsetsFile)
+      val buf = readByteArrayFromFile(bufFile)
+
+      (docIdIndexes, offsets, buf)
+    }
+
+    def delete: Boolean = bufFile.delete() && offsetsFile.delete() && docIdIdxFile.delete()
+
+    def close(): Unit = {
+      outBuf.close()
+      outOffsets.close()
+      outDocIdIdx.close()
+    }
+  }
 
   val docIds: ArrayBuffer[String] = new ArrayBuffer[String]
   var curDocTextOffset: Int = 0
   val docTextOffsets: ArrayBuffer[Int] = new ArrayBuffer[Int]
   val docTextOS: StringBuilder = new StringBuilder
-  var docAnnotationMap: Map[String, (IntArrayList, IntArrayList, ByteArrayOutputStream)] = {
-    new TreeMap[String, (IntArrayList, IntArrayList, ByteArrayOutputStream)]()
+  var docAnnotationMap: Map[String, TempAnnotationFiles] = {
+    new TreeMap[String, TempAnnotationFiles]()
   }
 
   def getDocIds: Array[String] = docIds.toArray
 
   def getTextBuffer: (Array[Int], Array[Char]) = (docTextOffsets.toArray, docTextOS.toArray)
 
-  def getAnnotationBuffers: Map[String, (Array[Int], Array[Int], Array[Byte])] = {
-    docAnnotationMap.map(kv => (kv._1, (kv._2._1.toArray, kv._2._2.toArray, kv._2._3.toByteArray)))
+  def getAnnotationMap: Map[String, TempAnnotationFiles] = {
+    docAnnotationMap
   }
 
   def serialize(it: Iterator[(String, String, String)]): Unit = {
     it.foreach(v => addAnnotatedDocument(v._1, v._2, v._3))
-  }
-
-  def makeKey(annotClass: String, annotType: String): String = {
-    val delim = AnnotatedDocumentSerializer.DELIM
-    delim + annotClass + delim + annotType + delim
-  }
-
-  def decodeAnnotationString(annotStr: String): (String, (Int, Int, Int, String)) = {
-    val e = annotStr.split("\\^", 6)
-    val annotKey = makeKey(e(1), e(2))
-    val annotId = e(0).toInt
-    val startOffset = e(3).toInt
-    val endOffset = e(4).toInt
-    val metadata = if (e.length == 6) URLDecoder.decode(e(5), "UTF-8") else ""
-    (annotKey, (annotId, startOffset, endOffset, metadata))
   }
 
   def annotationRecordSize(dat: Array[(Int, Int, Int, String)]): Int = {
@@ -52,9 +89,7 @@ class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean = true)
   }
 
   def serializeAnnotationRecord(dat: Array[(Int, Int, Int, String)],
-                                baos: ByteArrayOutputStream): Unit = {
-    val out = new DataOutputStream(baos)
-
+                                out: DataOutputStream): Unit = {
     out.writeInt(dat.length)
     dat.map(_._2).foreach(i => out.writeInt(i))
     dat.map(_._3).foreach(i => out.writeInt(i))
@@ -66,24 +101,21 @@ class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean = true)
       out.writeShort(metadata.length)
       out.writeBytes(metadata)
     })
-
-    out.close()
-  }
-
-  def newAnnotationEntry(key: String): (IntArrayList, IntArrayList, ByteArrayOutputStream) = {
-    (new IntArrayList, new IntArrayList, new ByteArrayOutputStream)
   }
 
   def addAnnotations(docIdOffset: Int, docAnnotation: String): Unit = {
-    docAnnotation.split('\n').map(decodeAnnotationString).groupBy(_._1)
+    docAnnotation
+      .split('\n')
+      .map(AnnotatedDocumentSerializer.decodeAnnotationString)
+      .groupBy(_._1)
       .foreach(kv => {
         if (!docAnnotationMap.contains(kv._1))
-          docAnnotationMap += (kv._1 -> newAnnotationEntry(kv._1))
+          docAnnotationMap += (kv._1 -> new TempAnnotationFiles(kv._1, tempDir))
         val annotEntry = docAnnotationMap(kv._1)
         val dat = kv._2.map(_._2).sortBy(_._2)
-        annotEntry._1.add(docIdOffset)
-        annotEntry._2.add(annotEntry._3.size())
-        serializeAnnotationRecord(dat, annotEntry._3)
+        annotEntry.docIdIdxStream.writeInt(docIdOffset)
+        annotEntry.offsetsStream.writeInt(annotEntry.bufStream.size())
+        serializeAnnotationRecord(dat, annotEntry.bufStream)
       })
   }
 
@@ -100,4 +132,26 @@ class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean = true)
 
 object AnnotatedDocumentSerializer {
   val DELIM: Char = '^'
+
+  def makeKey(annotClass: String, annotType: String): String = {
+    val delim = AnnotatedDocumentSerializer.DELIM
+    delim + annotClass + delim + annotType + delim
+  }
+
+  def decodeAnnotationString(annotStr: String): (String, (Int, Int, Int, String)) = {
+    val e = annotStr.split("\\^", 6)
+    val annotKey = makeKey(e(1), e(2))
+    val annotId = e(0).toInt
+    val startOffset = e(3).toInt
+    val endOffset = e(4).toInt
+    val metadata = if (e.length == 6) URLDecoder.decode(e(5), "UTF-8") else ""
+    (annotKey, (annotId, startOffset, endOffset, metadata))
+  }
+
+  def parseAnnotations(docAnnotation: String): Map[String, Array[(Int, Int, Int, String)]] = {
+    docAnnotation.split("\n")
+      .map(decodeAnnotationString)
+      .groupBy(_._1)
+      .mapValues(v => v.map(_._2).sortBy(_._2))
+  }
 }

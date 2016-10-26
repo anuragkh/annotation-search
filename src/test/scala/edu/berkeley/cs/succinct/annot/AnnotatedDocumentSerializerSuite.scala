@@ -29,9 +29,9 @@ class AnnotatedDocumentSerializerSuite extends FunSuite {
     assert(docText === (doc1._2 + "\n" + doc2._2 + "\n" + doc3._2 + "\n").toCharArray)
 
     // Check document annotations
-    val annotBuffers = ser.getAnnotationBuffers
+    val annotBuffers = ser.getAnnotationMap
 
-    val geWordData = annotBuffers("^ge^word^")
+    val geWordData = annotBuffers("^ge^word^").read
     val geWordDocIdOffsets = geWordData._1
     val geWordOffsets = geWordData._2
     assert(geWordOffsets === Array[Int](0, 55, 101))
@@ -40,7 +40,7 @@ class AnnotatedDocumentSerializerSuite extends FunSuite {
     val geWordBais = new ByteArrayInputStream(geWordBuffer)
     val geWordIn = new DataInputStream(geWordBais)
 
-    val geSpaceData = annotBuffers("^ge^space^")
+    val geSpaceData = annotBuffers("^ge^space^").read
     val geSpaceDocIdOffsets = geSpaceData._1
     val geSpaceOffsets = geSpaceData._2
     assert(geSpaceOffsets === Array[Int](0, 32, 64))
