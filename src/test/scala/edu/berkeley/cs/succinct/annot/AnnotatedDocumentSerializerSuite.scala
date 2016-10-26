@@ -1,7 +1,8 @@
 package edu.berkeley.cs.succinct.annot
 
-import java.io.{ByteArrayInputStream, DataInputStream}
+import java.io.{ByteArrayInputStream, DataInputStream, File}
 
+import edu.berkeley.cs.succinct.annot.serde.AnnotatedDocumentSerializer
 import org.scalatest.FunSuite
 
 class AnnotatedDocumentSerializerSuite extends FunSuite {
@@ -14,9 +15,9 @@ class AnnotatedDocumentSerializerSuite extends FunSuite {
   val doc3 = ("doc3", "Document number three",
     "1^ge^word^0^8^a\n2^ge^space^8^9\n3^ge^word^9^15^b&c\n4^ge^space^15^16\n5^ge^word^16^21^d^e")
   val data: Seq[(String, String, String)] = Seq(doc1, doc2, doc3)
+  val tmpDir = new File(System.getProperty("java.io.tmpdir"))
 
-  test("serialize") {
-    val ser = new AnnotatedDocumentSerializer(true)
+  def serializeTest(ser: AnnotatedDocumentSerializer): Unit = {
     ser.serialize(data.iterator)
 
     // Check docIds
@@ -135,5 +136,15 @@ class AnnotatedDocumentSerializerSuite extends FunSuite {
         assert(geSpaceIn.readShort() == 0)
       }
     })
+  }
+
+  test("serialize in-memory") {
+    val ser = new AnnotatedDocumentSerializer(true, (true, tmpDir))
+    serializeTest(ser)
+  }
+
+  test("serialize on-disk") {
+    val ser = new AnnotatedDocumentSerializer(true, (true, tmpDir))
+    serializeTest(ser)
   }
 }
