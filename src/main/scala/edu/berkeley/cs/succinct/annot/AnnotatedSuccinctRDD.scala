@@ -146,6 +146,7 @@ object AnnotatedSuccinctRDD {
 
   private def getTemDir(sc: SparkContext): File = {
     val dirs = sc.getConf.get("spark.local.dir", System.getProperty("java.io.tmpdir")).split(",")
+    println("Temp Dir: " + dirs(0))
     new File(dirs(0))
   }
 
