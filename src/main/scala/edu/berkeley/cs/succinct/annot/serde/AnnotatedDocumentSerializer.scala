@@ -1,82 +1,32 @@
-package edu.berkeley.cs.succinct.annot
+package edu.berkeley.cs.succinct.annot.serde
 
 import java.io._
 import java.net.URLDecoder
 import java.util.InvalidPropertiesFormatException
 
-import edu.berkeley.cs.succinct.util.SuccinctConstants
-
 import scala.collection.immutable.TreeMap
 import scala.collection.mutable.ArrayBuffer
 
-class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean = true,
-                                  tempDir: File = new File(System.getProperty("java.io.tmpdir")))
+class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean = true, conf: (Boolean, File))
   extends Serializable {
 
-  class TempAnnotationFiles(key: String, tmpDir: File) {
-    val bufFile: File = File.createTempFile(key.replace('^', '-'), "tmp-buf", tempDir)
-    bufFile.deleteOnExit()
-    val outBuf = new DataOutputStream(new FileOutputStream(bufFile))
-
-    val offsetsFile: File = File.createTempFile(key.replace('^', '-'), "tmp-off")
-    offsetsFile.deleteOnExit()
-    val outOffsets = new DataOutputStream(new FileOutputStream(offsetsFile))
-
-    val docIdIdxFile: File = File.createTempFile(key.replace('^', '-'), "tmp-dir")
-    docIdIdxFile.deleteOnExit()
-    val outDocIdIdx = new DataOutputStream(new FileOutputStream(docIdIdxFile))
-
-    def bufStream: DataOutputStream = outBuf
-
-    def offsetsStream: DataOutputStream = outOffsets
-
-    def docIdIdxStream: DataOutputStream = outDocIdIdx
-
-    private def readIntArrayFromFile(file: File): Array[Int] = {
-      val arr = new Array[Int](file.length().toInt / SuccinctConstants.INT_SIZE_BYTES)
-      val in = new DataInputStream(new FileInputStream(file))
-      for (i <- arr.indices) {
-        arr(i) = in.readInt()
-      }
-      arr
-    }
-
-    private def readByteArrayFromFile(file: File): Array[Byte] = {
-      val arr = new Array[Byte](file.length().toInt)
-      new DataInputStream(new FileInputStream(file)).readFully(arr)
-      arr
-    }
-
-    def read: (Array[Int], Array[Int], Array[Byte]) = {
-      val docIdIndexes = readIntArrayFromFile(docIdIdxFile)
-      val offsets = readIntArrayFromFile(offsetsFile)
-      val buf = readByteArrayFromFile(bufFile)
-
-      (docIdIndexes, offsets, buf)
-    }
-
-    def delete: Boolean = bufFile.delete() && offsetsFile.delete() && docIdIdxFile.delete()
-
-    def close(): Unit = {
-      outBuf.close()
-      outOffsets.close()
-      outDocIdIdx.close()
-    }
-  }
+  val inMemory = conf._1
+  val tempDir = conf._2
 
   val docIds: ArrayBuffer[String] = new ArrayBuffer[String]
   var curDocTextOffset: Int = 0
   val docTextOffsets: ArrayBuffer[Int] = new ArrayBuffer[Int]
   val docTextOS: StringBuilder = new StringBuilder
-  var docAnnotationMap: Map[String, TempAnnotationFiles] = {
-    new TreeMap[String, TempAnnotationFiles]()
+  var docAnnotationMap: Map[String, TempAnnotationData] = {
+    new TreeMap[String, TempAnnotationData]()
   }
 
   def getDocIds: Array[String] = docIds.toArray
 
   def getTextBuffer: (Array[Int], Array[Char]) = (docTextOffsets.toArray, docTextOS.toArray)
 
-  def getAnnotationMap: Map[String, TempAnnotationFiles] = {
+  def getAnnotationMap: Map[String, TempAnnotationData] = {
+    docAnnotationMap.foreach(_._2.close())
     docAnnotationMap
   }
 
@@ -109,12 +59,16 @@ class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean = true,
       .map(AnnotatedDocumentSerializer.decodeAnnotationString)
       .groupBy(_._1)
       .foreach(kv => {
-        if (!docAnnotationMap.contains(kv._1))
-          docAnnotationMap += (kv._1 -> new TempAnnotationFiles(kv._1, tempDir))
+        if (!docAnnotationMap.contains(kv._1)) {
+          if (inMemory)
+            docAnnotationMap += (kv._1 -> new TempAnnotationBuffers(kv._1))
+          else
+            docAnnotationMap += (kv._1 -> new TempAnnotationFiles(kv._1, tempDir))
+        }
         val annotEntry = docAnnotationMap(kv._1)
         val dat = kv._2.map(_._2).sortBy(_._2)
-        annotEntry.docIdIdxStream.writeInt(docIdOffset)
-        annotEntry.offsetsStream.writeInt(annotEntry.bufStream.size())
+        annotEntry.writeDocIdIdx(docIdOffset)
+        annotEntry.writeOffset(annotEntry.bufStream.size())
         serializeAnnotationRecord(dat, annotEntry.bufStream)
       })
   }
