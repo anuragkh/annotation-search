@@ -221,6 +221,7 @@ object AnnotatedSuccinctRDD {
       val per1StartTime = System.currentTimeMillis()
       val docIds = serializer.getDocIds
       val pathDocIds = new Path(partitionLocation + ".sdocids")
+      fsLocal.delete(pathDocIds, true)
       val osDocIds = new ObjectOutputStream(fsLocal.create(pathDocIds))
       osDocIds.writeObject(docIds)
       osDocIds.close()
@@ -231,6 +232,7 @@ object AnnotatedSuccinctRDD {
       val per2StartTime = System.currentTimeMillis()
       val docTextBuffer = serializer.getTextBuffer
       val pathDoc = new Path(partitionLocation + ".sdocs")
+      fsLocal.delete(pathDoc, true)
       val osDoc = fsLocal.create(pathDoc)
       val docBuf = new SuccinctIndexedFileBuffer(docTextBuffer._2, docTextBuffer._1)
       docBuf.writeToStream(osDoc)
@@ -242,7 +244,9 @@ object AnnotatedSuccinctRDD {
       /* Write Succinct annotationBuffers to persistent store */
       val per3StartTime = System.currentTimeMillis()
       val pathAnnotToc = new Path(partitionLocation + ".sannots.toc")
+      fsLocal.delete(pathAnnotToc, true)
       val pathAnnot = new Path(partitionLocation + ".sannots")
+      fsLocal.delete(pathAnnot, true)
       val osAnnotToc = fsLocal.create(pathAnnotToc)
       val osAnnot = fsLocal.create(pathAnnot)
       var totAnnotBytes = 0
