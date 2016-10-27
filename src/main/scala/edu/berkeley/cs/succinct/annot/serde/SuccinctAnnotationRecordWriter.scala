@@ -36,6 +36,7 @@ class SuccinctAnnotationRecordWriter(path: Path, ignoreParseErrors: Boolean, con
     val per1StartTime = System.currentTimeMillis()
     val docIds = serializer.getDocIds
     val pathDocIds = File.createTempFile("part-" + "%05d".format(i) + ".sdocids", ".tmp", tmpDir)
+    pathDocIds.deleteOnExit()
     val osDocIds = new ObjectOutputStream(new FileOutputStream(pathDocIds))
     osDocIds.writeObject(docIds)
     osDocIds.close()
@@ -46,6 +47,7 @@ class SuccinctAnnotationRecordWriter(path: Path, ignoreParseErrors: Boolean, con
     val per2StartTime = System.currentTimeMillis()
     val docTextBuffer = serializer.getTextBuffer
     val pathDoc = File.createTempFile("part-" + "%05d".format(i) + ".sdocs", ".tmp", tmpDir)
+    pathDoc.deleteOnExit()
     val osDoc = new DataOutputStream(new FileOutputStream(pathDoc))
     SuccinctIndexedFileBuffer.construct(docTextBuffer._2, docTextBuffer._1, osDoc)
     osDoc.close()
@@ -56,7 +58,9 @@ class SuccinctAnnotationRecordWriter(path: Path, ignoreParseErrors: Boolean, con
     /* Write Succinct annotationBuffers to persistent store */
     val per3StartTime = System.currentTimeMillis()
     val pathAnnotToc = File.createTempFile("part-" + "%05d".format(i) + ".sannots.toc", ".tmp", tmpDir)
+    pathAnnotToc.deleteOnExit()
     val pathAnnot = File.createTempFile("part-" + "%05d".format(i) + ".sannots", ".tmp", tmpDir)
+    pathAnnot.deleteOnExit()
     val osAnnotToc = new DataOutputStream(new FileOutputStream(pathAnnotToc))
     val osAnnot = new DataOutputStream(new FileOutputStream(pathAnnot))
     var totAnnotBytes = 0
