@@ -1,6 +1,6 @@
 package edu.berkeley.cs.succinct.annot.serde
 
-import java.io.{File, ObjectOutputStream}
+import java.io.{DataOutputStream, FileOutputStream, File, ObjectOutputStream}
 
 import edu.berkeley.cs.succinct.buffers.SuccinctIndexedFileBuffer
 import edu.berkeley.cs.succinct.buffers.annot.SuccinctAnnotationBuffer
@@ -9,9 +9,15 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.io.NullWritable
 import org.apache.hadoop.mapreduce.{RecordWriter, TaskAttemptContext}
 
+import scala.collection.immutable.TreeMap
+
 class SuccinctAnnotationRecordWriter(path: Path, ignoreParseErrors: Boolean, conf: Configuration,
                                      constructConf: (Boolean, File))
   extends RecordWriter[NullWritable, (Int, Iterator[(String, String, String)])] {
+
+
+  val fs = FileSystem.get(path.toUri, conf)
+  var localFiles = new TreeMap[Int, (File, File, File, File)]()
 
   override def write(key: NullWritable, part: (Int, Iterator[(String, String, String)])): Unit = {
     val i = part._1
@@ -24,16 +30,13 @@ class SuccinctAnnotationRecordWriter(path: Path, ignoreParseErrors: Boolean, con
     val serEndTime = System.currentTimeMillis()
     println("Partition " + i + ": Serialization time: " + (serEndTime - serStartTime) + "ms")
 
-    /* Obtain configuration parameters. */
-    val partitionLocation = path.toString.stripSuffix("/") + "/part-" + "%05d".format(i)
-
-    val fsLocal = FileSystem.get(new Path(partitionLocation).toUri, conf)
+    val tmpDir = constructConf._2
 
     /* Write docIds to persistent store */
     val per1StartTime = System.currentTimeMillis()
     val docIds = serializer.getDocIds
-    val pathDocIds = new Path(partitionLocation + ".sdocids")
-    val osDocIds = new ObjectOutputStream(fsLocal.create(pathDocIds))
+    val pathDocIds = File.createTempFile("part-" + "%05d".format(i) + ".sdocids", ".tmp", tmpDir)
+    val osDocIds = new ObjectOutputStream(new FileOutputStream(pathDocIds))
     osDocIds.writeObject(docIds)
     osDocIds.close()
     val per1EndTime = System.currentTimeMillis()
@@ -42,8 +45,8 @@ class SuccinctAnnotationRecordWriter(path: Path, ignoreParseErrors: Boolean, con
     /* Write Succinct docTextBuffer to persistent store */
     val per2StartTime = System.currentTimeMillis()
     val docTextBuffer = serializer.getTextBuffer
-    val pathDoc = new Path(partitionLocation + ".sdocs")
-    val osDoc = fsLocal.create(pathDoc)
+    val pathDoc = File.createTempFile("part-" + "%05d".format(i) + ".sdocs", ".tmp", tmpDir)
+    val osDoc = new DataOutputStream(new FileOutputStream(pathDoc))
     SuccinctIndexedFileBuffer.construct(docTextBuffer._2, docTextBuffer._1, osDoc)
     osDoc.close()
     val per2EndTime = System.currentTimeMillis()
@@ -52,20 +55,20 @@ class SuccinctAnnotationRecordWriter(path: Path, ignoreParseErrors: Boolean, con
 
     /* Write Succinct annotationBuffers to persistent store */
     val per3StartTime = System.currentTimeMillis()
-    val pathAnnotToc = new Path(partitionLocation + ".sannots.toc")
-    val pathAnnot = new Path(partitionLocation + ".sannots")
-    val osAnnotToc = fsLocal.create(pathAnnotToc)
-    val osAnnot = fsLocal.create(pathAnnot)
+    val pathAnnotToc = File.createTempFile("part-" + "%05d".format(i) + ".sannots.toc", ".tmp", tmpDir)
+    val pathAnnot = File.createTempFile("part-" + "%05d".format(i) + ".sannots", ".tmp", tmpDir)
+    val osAnnotToc = new DataOutputStream(new FileOutputStream(pathAnnotToc))
+    val osAnnot = new DataOutputStream(new FileOutputStream(pathAnnot))
     var totAnnotBytes = 0
     serializer.getAnnotationMap.foreach(kv => {
       val key = kv._1
-      val startPos = osAnnot.getPos
+      val startPos = osAnnot.size()
 
       // Write Succinct annotationBuffer to persistent store.
       val buffers = kv._2.read
       SuccinctAnnotationBuffer.construct(buffers._3, buffers._2, buffers._1, osAnnot)
       totAnnotBytes += buffers._3.length
-      val endPos = osAnnot.getPos
+      val endPos = osAnnot.size()
       val size = endPos - startPos
 
       // Add entry to TOC
@@ -76,9 +79,38 @@ class SuccinctAnnotationRecordWriter(path: Path, ignoreParseErrors: Boolean, con
     val per3EndTime = System.currentTimeMillis()
     println("Partition " + i + ": Annotation (" + totAnnotBytes / (1024 * 1024)
       + "MB) index time: " + (per3EndTime - per3StartTime) + "ms")
+
+    localFiles += (i -> (pathDocIds, pathDoc, pathAnnotToc, pathAnnot))
   }
 
   override def close(context: TaskAttemptContext): Unit = {
+    localFiles.foreach(entry => {
+      val i = entry._1
+      val files = entry._2
+      val pathDocIds = new Path(path, "part-" + "%05d".format(i) + ".sdocids")
+      val pathDoc = new Path(path, "part-" + "%05d".format(i) + ".sdocs")
+      val pathAnnotToc = new Path(path, "part-" + "%05d".format(i) + ".sannots.toc")
+      val pathAnnot = new Path(path, "part-" + "%05d".format(i) + ".sannots")
 
+      if (fs.exists(pathDocIds)) {
+        fs.delete(pathDocIds, true)
+      }
+      fs.copyFromLocalFile(true, new Path(files._1.getAbsolutePath), pathDocIds)
+
+      if (fs.exists(pathDoc)) {
+        fs.delete(pathDoc, true)
+      }
+      fs.copyFromLocalFile(true, new Path(files._2.getAbsolutePath), pathDoc)
+
+      if (fs.exists(pathAnnotToc)) {
+        fs.delete(pathAnnotToc, true)
+      }
+      fs.copyFromLocalFile(true, new Path(files._3.getAbsolutePath), pathAnnotToc)
+
+      if (fs.exists(pathAnnot)) {
+        fs.delete(pathAnnot, true)
+      }
+      fs.copyFromLocalFile(true, new Path(files._4.getAbsolutePath), pathAnnot)
+    })
   }
 }

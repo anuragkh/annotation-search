@@ -9,11 +9,11 @@ class TempAnnotationFiles(key: String, tmpDir: File) extends TempAnnotationData 
   bufFile.deleteOnExit()
   val outBuf = new DataOutputStream(new FileOutputStream(bufFile))
 
-  val offsetsFile: File = File.createTempFile(key.replace('^', '-'), "tmp-off")
+  val offsetsFile: File = File.createTempFile(key.replace('^', '-'), "tmp-off", tmpDir)
   offsetsFile.deleteOnExit()
   val outOffsets = new DataOutputStream(new FileOutputStream(offsetsFile))
 
-  val docIdIdxFile: File = File.createTempFile(key.replace('^', '-'), "tmp-dir")
+  val docIdIdxFile: File = File.createTempFile(key.replace('^', '-'), "tmp-dir", tmpDir)
   docIdIdxFile.deleteOnExit()
   val outDocIdIdx = new DataOutputStream(new FileOutputStream(docIdIdxFile))
 
