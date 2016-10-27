@@ -1,7 +1,7 @@
 package edu.berkeley.cs.succinct.annot.example
 
 import com.elsevier.cat.StringArrayWritable
-import edu.berkeley.cs.succinct.annot._
+import edu.berkeley.cs.succinct.annot.AnnotatedSuccinctRDD
 import org.apache.hadoop.io._
 import org.apache.hadoop.mapred._
 import org.apache.spark.{SparkConf, SparkContext}
@@ -19,6 +19,6 @@ object SparkConstruct {
     val rdd = sc.hadoopFile[Text, StringArrayWritable, SequenceFileInputFormat[Text, StringArrayWritable]](inputPath)
       .map(v => (v._1.toString, v._2.toStrings()(0), v._2.toStrings()(1)))
 
-    rdd.saveAsAnnotatedSuccinctFile(outputPath)
+    AnnotatedSuccinctRDD(rdd).save(outputPath)
   }
 }
