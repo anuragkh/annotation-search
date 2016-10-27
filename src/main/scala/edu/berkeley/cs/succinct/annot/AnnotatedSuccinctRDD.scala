@@ -1,17 +1,21 @@
 package edu.berkeley.cs.succinct.annot
 
-import java.io.{File, ObjectOutputStream}
-import java.util.Properties
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.{Date, Properties}
 
 import edu.berkeley.cs.succinct.annot.impl.AnnotatedSuccinctRDDImpl
-import edu.berkeley.cs.succinct.annot.serde.AnnotatedDocumentSerializer
+import edu.berkeley.cs.succinct.annot.serde.{AnnotatedDocumentSerializer, SuccinctAnnotationOutputFormat, SuccinctHadoopMapReduceUtil}
 import edu.berkeley.cs.succinct.buffers.SuccinctIndexedFileBuffer
 import edu.berkeley.cs.succinct.buffers.annot._
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path, PathFilter}
+import org.apache.hadoop.io.NullWritable
+import org.apache.hadoop.mapreduce.Job
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat
+import org.apache.spark._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.succinct.annot.AnnotatedSuccinctPartition
-import org.apache.spark.{Dependency, Partition, SparkContext, TaskContext}
 
 abstract class AnnotatedSuccinctRDD(@transient private val sc: SparkContext,
                                     @transient private val deps: Seq[Dependency[_]])
@@ -185,92 +189,103 @@ object AnnotatedSuccinctRDD {
       fs.mkdirs(path)
     }
 
-    val it = conf.iterator()
-    val properties = new Properties()
-    while (it.hasNext) {
-      val entry = it.next()
-      properties.setProperty(entry.getKey, entry.getValue)
-    }
-
-    val constructConf = getConstructionConf(inputRDD.sparkContext)
+    val sparkContext = inputRDD.sparkContext
+    val serializableConf = new SerializableWritable(conf)
+    val now = new Date()
 
     inputRDD.sortBy(_._1).mapPartitionsWithIndex((i, it) => Iterator((i, it))).foreach(part => {
       val i = part._1
-      val it = part._2
+      val conf = serializableConf.value
+      val job = Job.getInstance(conf)
+      job.setOutputKeyClass(classOf[NullWritable])
+      job.setOutputFormatClass(classOf[SuccinctAnnotationOutputFormat])
+      FileOutputFormat.setOutputPath(job, new Path(location))
 
-      /* Serialize partition */
-      val serStartTime = System.currentTimeMillis()
-      val serializer = new AnnotatedDocumentSerializer(ignoreParseErrors, constructConf)
-      serializer.serialize(it)
-      val serEndTime = System.currentTimeMillis()
-      println("Partition " + i + ": Serialization time: " + (serEndTime - serStartTime) + "ms")
+      val formatter = new SimpleDateFormat("yyyyMMddHHmmss")
+      val jobtrackerID = formatter.format(now)
+      val attemptNumber = 1
 
-      /* Obtain configuration parameters. */
-      val partitionLocation = location.stripSuffix("/") + "/part-" + "%05d".format(i)
-      val localConf = new Configuration()
-      val propIt = properties.entrySet().iterator()
-      while (propIt.hasNext) {
-        val entry = propIt.next()
-        val propName = entry.getKey.asInstanceOf[String]
-        val propValue = entry.getValue.asInstanceOf[String]
-        localConf.set(propName, propValue)
-      }
-      val fsLocal = FileSystem.get(new Path(partitionLocation).toUri, localConf)
+      val attemptID = SuccinctHadoopMapReduceUtil.newTaskAttemptID(jobtrackerID, i, isMap = false, i, attemptNumber)
+      val hadoopContext = SuccinctHadoopMapReduceUtil.newTaskAttemptContext(job.getConfiguration, attemptID)
 
-      /* Write docIds to persistent store */
-      val per1StartTime = System.currentTimeMillis()
-      val docIds = serializer.getDocIds
-      val pathDocIds = new Path(partitionLocation + ".sdocids")
-      fsLocal.delete(pathDocIds, true)
-      val osDocIds = new ObjectOutputStream(fsLocal.create(pathDocIds))
-      osDocIds.writeObject(docIds)
-      osDocIds.close()
-      val per1EndTime = System.currentTimeMillis()
-      println("Partition " + i + ": Doc. ids persist time: " + (per1EndTime - per1StartTime) + "ms")
-
-      /* Write Succinct docTextBuffer to persistent store */
-      val per2StartTime = System.currentTimeMillis()
-      val docTextBuffer = serializer.getTextBuffer
-      val pathDoc = new Path(partitionLocation + ".sdocs")
-      fsLocal.delete(pathDoc, true)
-      val osDoc = fsLocal.create(pathDoc)
-      val docBuf = new SuccinctIndexedFileBuffer(docTextBuffer._2, docTextBuffer._1)
-      docBuf.writeToStream(osDoc)
-      osDoc.close()
-      val per2EndTime = System.currentTimeMillis()
-      println("Partition " + i + ": Doc. txt (" + docTextBuffer._2.length / (1024 * 1024)
-        + "MB) index time: " + (per2EndTime - per2StartTime) + "ms")
-
-      /* Write Succinct annotationBuffers to persistent store */
-      val per3StartTime = System.currentTimeMillis()
-      val pathAnnotToc = new Path(partitionLocation + ".sannots.toc")
-      fsLocal.delete(pathAnnotToc, true)
-      val pathAnnot = new Path(partitionLocation + ".sannots")
-      fsLocal.delete(pathAnnot, true)
-      val osAnnotToc = fsLocal.create(pathAnnotToc)
-      val osAnnot = fsLocal.create(pathAnnot)
-      var totAnnotBytes = 0
-      serializer.getAnnotationMap.foreach(kv => {
-        val key = kv._1
-        val startPos = osAnnot.getPos
-
-        // Write Succinct annotationBuffer to persistent store.
-        val buffers = kv._2.read
-        val annotBuf = new SuccinctAnnotationBuffer("", "", buffers._1, buffers._2, buffers._3)
-        annotBuf.writeToStream(osAnnot)
-        totAnnotBytes += buffers._3.length
-        val endPos = osAnnot.getPos
-        val size = endPos - startPos
-
-        // Add entry to TOC
-        osAnnotToc.writeBytes(s"$key\t$startPos\t$size\n")
-      })
-      osAnnotToc.close()
-      osAnnot.close()
-      val per3EndTime = System.currentTimeMillis()
-      println("Partition " + i + ": Annotation (" + totAnnotBytes / (1024 * 1024)
-        + "MB) index time: " + (per3EndTime - per3StartTime) + "ms")
+      val format = new SuccinctAnnotationOutputFormat
+      val commiter = format.getOutputCommitter(hadoopContext)
+      commiter.setupTask(hadoopContext)
+      val writer = format.getRecordWriter(hadoopContext)
+      writer.write(NullWritable.get(), part)
+      writer.close(hadoopContext)
+      commiter.commitTask(hadoopContext)
     })
+
+    //    inputRDD.sortBy(_._1).mapPartitionsWithIndex((i, it) => Iterator((i, it))).foreach(part => {
+    //      val i = part._1
+    //      val it = part._2
+    //
+    //      /* Serialize partition */
+    //      val serStartTime = System.currentTimeMillis()
+    //      val serializer = new AnnotatedDocumentSerializer(ignoreParseErrors, constructConf)
+    //      serializer.serialize(it)
+    //      val serEndTime = System.currentTimeMillis()
+    //      println("Partition " + i + ": Serialization time: " + (serEndTime - serStartTime) + "ms")
+    //
+    //      /* Obtain configuration parameters. */
+    //      val partitionLocation = location.stripSuffix("/") + "/part-" + "%05d".format(i)
+    //      val localConf = serializableConf.value
+    //      val fsLocal = FileSystem.get(new Path(partitionLocation).toUri, localConf)
+    //
+    //      /* Write docIds to persistent store */
+    //      val per1StartTime = System.currentTimeMillis()
+    //      val docIds = serializer.getDocIds
+    //      val pathDocIds = new Path(partitionLocation + ".sdocids")
+    //      val osDocIds = new ObjectOutputStream(fsLocal.create(pathDocIds))
+    //      osDocIds.writeObject(docIds)
+    //      osDocIds.close()
+    //      val per1EndTime = System.currentTimeMillis()
+    //      println("Partition " + i + ": Doc. ids persist time: " + (per1EndTime - per1StartTime) + "ms")
+    //
+    //      /* Write Succinct docTextBuffer to persistent store */
+    //      val per2StartTime = System.currentTimeMillis()
+    //      val docTextBuffer = serializer.getTextBuffer
+    //      val pathDoc = new Path(partitionLocation + ".sdocs")
+    //      val osDoc = fsLocal.create(pathDoc)
+    //      val docBuf = new SuccinctIndexedFileBuffer(docTextBuffer._2, docTextBuffer._1)
+    //      docBuf.writeToStream(osDoc)
+    //      osDoc.close()
+    //      val per2EndTime = System.currentTimeMillis()
+    //      println("Partition " + i + ": Doc. txt (" + docTextBuffer._2.length / (1024 * 1024)
+    //        + "MB) index time: " + (per2EndTime - per2StartTime) + "ms")
+    //
+    //      /* Write Succinct annotationBuffers to persistent store */
+    //      val per3StartTime = System.currentTimeMillis()
+    //      val pathAnnotToc = new Path(partitionLocation + ".sannots.toc")
+    //      val pathAnnot = new Path(partitionLocation + ".sannots")
+    //      val osAnnotToc = fsLocal.create(pathAnnotToc)
+    //      val osAnnot = fsLocal.create(pathAnnot)
+    //      var totAnnotBytes = 0
+    //      serializer.getAnnotationMap.foreach(kv => {
+    //        val key = kv._1
+    //        val startPos = osAnnot.getPos
+    //
+    //        // Write Succinct annotationBuffer to persistent store.
+    //        val buffers = kv._2.read
+    //        val annotBuf = new SuccinctAnnotationBuffer("", "", buffers._1, buffers._2, buffers._3)
+    //        annotBuf.writeToStream(osAnnot)
+    //        totAnnotBytes += buffers._3.length
+    //        val endPos = osAnnot.getPos
+    //        val size = endPos - startPos
+    //
+    //        // Add entry to TOC
+    //        osAnnotToc.writeBytes(s"$key\t$startPos\t$size\n")
+    //      })
+    //      osAnnotToc.close()
+    //      osAnnot.close()
+    //      val per3EndTime = System.currentTimeMillis()
+    //      println("Partition " + i + ": Annotation (" + totAnnotBytes / (1024 * 1024)
+    //        + "MB) index time: " + (per3EndTime - per3StartTime) + "ms")
+    //    })
+
+    val successPath = new Path(location.stripSuffix("/") + "/_SUCCESS")
+    fs.create(successPath).close()
   }
 
   /**
