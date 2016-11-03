@@ -150,21 +150,22 @@ abstract class AnnotatedSuccinctRDD(@transient private val sc: SparkContext,
 object AnnotatedSuccinctRDD {
 
   private def getConstructionConf(sc: SparkContext): (Boolean, File) = {
-    val inMemory = sc.getConf.get("succinct.construct.inmemory", "true").toBoolean
+    val serializeInMemory = sc.getConf.get("succinct.annotations.serializeInMemory", "true").toBoolean
     val dirs = sc.getConf.get("spark.local.dir", System.getProperty("java.io.tmpdir")).split(",")
-    println("In-memory: " + inMemory + "Temp Dir: " + dirs(0))
-    (inMemory, new File(dirs(0)))
+    println("In-memory: " + serializeInMemory + "Temp Dir: " + dirs(0))
+    (serializeInMemory, new File(dirs(0)))
   }
 
   /**
     * Creates an [[AnnotatedSuccinctRDD]] from an RDD of triplets (documentID, documentText, annotations).
     *
-    * @param inputRDD          RDD of (documentID, documentText, annotations) triplets.
-    * @param ignoreParseErrors Ignores errors in parsing annotations if set to true; throws an exception on error otherwise.
+    * @param inputRDD RDD of (documentID, documentText, annotations) triplets.
     * @return The [[AnnotatedSuccinctRDD]].
     */
-  def apply(inputRDD: RDD[(String, String, String)], ignoreParseErrors: Boolean = true): AnnotatedSuccinctRDD = {
-    val constructConf = getConstructionConf(inputRDD.sparkContext)
+  def apply(inputRDD: RDD[(String, String, String)]): AnnotatedSuccinctRDD = {
+    val sc = inputRDD.sparkContext
+    val constructConf = getConstructionConf(sc)
+    val ignoreParseErrors = sc.getConf.get("succinct.annotations.ignoreParseErrors", "true").toBoolean
     val partitionsRDD = inputRDD.sortBy(_._1)
       .mapPartitionsWithIndex((idx, it) => {
         createAnnotatedSuccinctPartition(it, ignoreParseErrors, constructConf)
@@ -175,13 +176,11 @@ object AnnotatedSuccinctRDD {
   /**
     * Constructs and writes the [[AnnotatedSuccinctRDD]] to given output path.
     *
-    * @param inputRDD          RDD of (documentID, documentText, annotations) triplets.
-    * @param location          Output path for the data.
-    * @param ignoreParseErrors Ignores errors in parsing annotations if set to true;
-    *                          throws an exception on error otherwise.
+    * @param inputRDD RDD of (documentID, documentText, annotations) triplets.
+    * @param location Output path for the data.
     */
   def construct(inputRDD: RDD[(String, String, String)], location: String,
-                conf: Configuration = new Configuration(), ignoreParseErrors: Boolean = true) {
+                conf: Configuration = new Configuration()) {
 
     val path = new Path(location)
     val fs = FileSystem.get(path.toUri, conf)
@@ -189,7 +188,6 @@ object AnnotatedSuccinctRDD {
       fs.mkdirs(path)
     }
 
-    val sparkContext = inputRDD.sparkContext
     val serializableConf = new SerializableWritable(conf)
     val now = new Date()
 
@@ -216,73 +214,6 @@ object AnnotatedSuccinctRDD {
       writer.close(hadoopContext)
       commiter.commitTask(hadoopContext)
     })
-
-    //    inputRDD.sortBy(_._1).mapPartitionsWithIndex((i, it) => Iterator((i, it))).foreach(part => {
-    //      val i = part._1
-    //      val it = part._2
-    //
-    //      /* Serialize partition */
-    //      val serStartTime = System.currentTimeMillis()
-    //      val serializer = new AnnotatedDocumentSerializer(ignoreParseErrors, constructConf)
-    //      serializer.serialize(it)
-    //      val serEndTime = System.currentTimeMillis()
-    //      println("Partition " + i + ": Serialization time: " + (serEndTime - serStartTime) + "ms")
-    //
-    //      /* Obtain configuration parameters. */
-    //      val partitionLocation = location.stripSuffix("/") + "/part-" + "%05d".format(i)
-    //      val localConf = serializableConf.value
-    //      val fsLocal = FileSystem.get(new Path(partitionLocation).toUri, localConf)
-    //
-    //      /* Write docIds to persistent store */
-    //      val per1StartTime = System.currentTimeMillis()
-    //      val docIds = serializer.getDocIds
-    //      val pathDocIds = new Path(partitionLocation + ".sdocids")
-    //      val osDocIds = new ObjectOutputStream(fsLocal.create(pathDocIds))
-    //      osDocIds.writeObject(docIds)
-    //      osDocIds.close()
-    //      val per1EndTime = System.currentTimeMillis()
-    //      println("Partition " + i + ": Doc. ids persist time: " + (per1EndTime - per1StartTime) + "ms")
-    //
-    //      /* Write Succinct docTextBuffer to persistent store */
-    //      val per2StartTime = System.currentTimeMillis()
-    //      val docTextBuffer = serializer.getTextBuffer
-    //      val pathDoc = new Path(partitionLocation + ".sdocs")
-    //      val osDoc = fsLocal.create(pathDoc)
-    //      val docBuf = new SuccinctIndexedFileBuffer(docTextBuffer._2, docTextBuffer._1)
-    //      docBuf.writeToStream(osDoc)
-    //      osDoc.close()
-    //      val per2EndTime = System.currentTimeMillis()
-    //      println("Partition " + i + ": Doc. txt (" + docTextBuffer._2.length / (1024 * 1024)
-    //        + "MB) index time: " + (per2EndTime - per2StartTime) + "ms")
-    //
-    //      /* Write Succinct annotationBuffers to persistent store */
-    //      val per3StartTime = System.currentTimeMillis()
-    //      val pathAnnotToc = new Path(partitionLocation + ".sannots.toc")
-    //      val pathAnnot = new Path(partitionLocation + ".sannots")
-    //      val osAnnotToc = fsLocal.create(pathAnnotToc)
-    //      val osAnnot = fsLocal.create(pathAnnot)
-    //      var totAnnotBytes = 0
-    //      serializer.getAnnotationMap.foreach(kv => {
-    //        val key = kv._1
-    //        val startPos = osAnnot.getPos
-    //
-    //        // Write Succinct annotationBuffer to persistent store.
-    //        val buffers = kv._2.read
-    //        val annotBuf = new SuccinctAnnotationBuffer("", "", buffers._1, buffers._2, buffers._3)
-    //        annotBuf.writeToStream(osAnnot)
-    //        totAnnotBytes += buffers._3.length
-    //        val endPos = osAnnot.getPos
-    //        val size = endPos - startPos
-    //
-    //        // Add entry to TOC
-    //        osAnnotToc.writeBytes(s"$key\t$startPos\t$size\n")
-    //      })
-    //      osAnnotToc.close()
-    //      osAnnot.close()
-    //      val per3EndTime = System.currentTimeMillis()
-    //      println("Partition " + i + ": Annotation (" + totAnnotBytes / (1024 * 1024)
-    //        + "MB) index time: " + (per3EndTime - per3StartTime) + "ms")
-    //    })
 
     val successPath = new Path(location.stripSuffix("/") + "/_SUCCESS")
     fs.create(successPath).close()

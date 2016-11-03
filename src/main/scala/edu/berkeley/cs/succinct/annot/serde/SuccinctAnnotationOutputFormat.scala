@@ -11,10 +11,10 @@ class SuccinctAnnotationOutputFormat
   override def getRecordWriter(job: TaskAttemptContext):
   RecordWriter[NullWritable, (Int, Iterator[(String, String, String)])] = {
     val conf = job.getConfiguration
-    val ignoreParseErrors = conf.get("succinct.construct.ignoreParseErrors", "true").toBoolean
-    val inMemory = conf.get("succinct.construct.inmemory", "true").toBoolean
+    val ignoreParseErrors = conf.get("succinct.annotations.ignoreParseErrors", "true").toBoolean
+    val serializeInMemory = conf.get("succinct.annotations.serializeInMemory", "true").toBoolean
     val dirs = conf.get("spark.local.dir", System.getProperty("java.io.tmpdir")).split(",")
     val path = FileOutputFormat.getOutputPath(job)
-    new SuccinctAnnotationRecordWriter(path, ignoreParseErrors, conf, (inMemory, new File(dirs(0))))
+    new SuccinctAnnotationRecordWriter(path, ignoreParseErrors, conf, (serializeInMemory, new File(dirs(0))))
   }
 }
