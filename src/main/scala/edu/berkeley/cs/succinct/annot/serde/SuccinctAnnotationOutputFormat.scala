@@ -14,6 +14,8 @@ class SuccinctAnnotationOutputFormat
     val ignoreParseErrors = conf.get("succinct.annotations.ignoreParseErrors", "true").toBoolean
     val serializeInMemory = conf.get("succinct.annotations.serializeInMemory", "true").toBoolean
     val dirs = conf.get("spark.local.dir", System.getProperty("java.io.tmpdir")).split(",")
+    println("ignoreParseErrors = " + ignoreParseErrors + " serializeInMemory = " + serializeInMemory
+      + "Spark local dir = " + dirs(0) + " persistInMemory = false")
     val path = FileOutputFormat.getOutputPath(job)
     new SuccinctAnnotationRecordWriter(path, ignoreParseErrors, conf, (serializeInMemory, new File(dirs(0))))
   }
