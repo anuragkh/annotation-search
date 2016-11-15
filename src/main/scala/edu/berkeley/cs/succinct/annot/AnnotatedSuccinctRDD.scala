@@ -249,10 +249,11 @@ object AnnotatedSuccinctRDD {
       }
     })
     val numPartitions = status.length
+    val dirs = sc.getConf.get("spark.local.dir", System.getProperty("java.io.tmpdir")).split(",")
     val partitionsRDD = sc.parallelize(0 until numPartitions, numPartitions)
       .mapPartitionsWithIndex[AnnotatedSuccinctPartition]((i, partition) => {
       val partitionLocation = location.stripSuffix("/") + "/part-" + "%05d".format(i)
-      Iterator(AnnotatedSuccinctPartition(partitionLocation, annotClassFilter, annotTypeFilter))
+      Iterator(AnnotatedSuccinctPartition(partitionLocation, annotClassFilter, annotTypeFilter, dirs(0)))
     }).cache()
     new AnnotatedSuccinctRDDImpl(partitionsRDD)
   }

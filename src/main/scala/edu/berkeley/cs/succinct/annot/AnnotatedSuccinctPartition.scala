@@ -1,6 +1,6 @@
 package org.apache.spark.succinct.annot
 
-import java.io.{ObjectInputStream, ObjectOutputStream}
+import java.io._
 import java.util.NoSuchElementException
 
 import edu.berkeley.cs.succinct.SuccinctIndexedFile
@@ -219,7 +219,7 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
     })
       .foldLeft(Iterator[Annotation]())(_ ++ _)
       .filter(a => {
-        (metadataFilter == null || metadataFilter(a.getMetadata))  &&
+        (metadataFilter == null || metadataFilter(a.getMetadata)) &&
           (textFilter == null || textFilter(extractDocument(a.getDocId, a.getStartOffset, a.getEndOffset - a.getStartOffset)))
       })
       .map(a => Result(a.getDocId, a.getStartOffset, a.getEndOffset, a))
@@ -725,28 +725,37 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
 }
 
 object AnnotatedSuccinctPartition {
-  def apply(partitionLocation: String, annotClassFilter: String, annotTypeFilter: String)
+  def apply(partitionLocation: String, annotClassFilter: String, annotTypeFilter: String, tmpDir: String)
   : AnnotatedSuccinctPartition = {
 
+    val fs = FileSystem.get(new Path(partitionLocation).toUri, new Configuration())
+
     val pathDoc = new Path(partitionLocation + ".sdocs")
-    val pathDocIds = new Path(partitionLocation + ".sdocids")
-
-    val fs = FileSystem.get(pathDoc.toUri, new Configuration())
-
-    val isDoc = fs.open(pathDoc)
-    val isDocIds = new ObjectInputStream(fs.open(pathDocIds))
-
+    val localPathDoc = tmpDir + File.separator + pathDoc.getName + ".tmp"
+    fs.copyToLocalFile(false, pathDoc, new Path(localPathDoc), true)
+    val isDoc = new DataInputStream(new FileInputStream(localPathDoc))
     val documentBuffer = new SuccinctIndexedFileBuffer(isDoc)
-    val keys = isDocIds.readObject().asInstanceOf[Array[String]]
-
     isDoc.close()
+    new File(localPathDoc).delete()
+
+    val pathDocIds = new Path(partitionLocation + ".sdocids")
+    val localPathDocIds = tmpDir + File.separator + pathDocIds.getName + ".tmp"
+    fs.copyToLocalFile(false, pathDocIds, new Path(localPathDocIds), true)
+    val isDocIds = new ObjectInputStream(new FileInputStream(localPathDocIds))
+    val keys = isDocIds.readObject().asInstanceOf[Array[String]]
     isDocIds.close()
+    new File(localPathDocIds).delete()
 
     val delim = "\\" + SuccinctAnnotationBuffer.DELIM
     val keyFilter = delim + annotClassFilter + delim + annotTypeFilter + delim
     val pathAnnotToc = new Path(partitionLocation + ".sannots.toc")
+    val localPathAnnotToc = tmpDir + File.separator + pathAnnotToc.getName + ".tmp"
+    fs.copyToLocalFile(false, pathAnnotToc, new Path(localPathAnnotToc), true)
     val pathAnnot = new Path(partitionLocation + ".sannots")
-    val isAnnotToc = fs.open(pathAnnotToc)
+    val localPathAnnot = tmpDir + File.separator + pathAnnot.getName + ".tmp"
+    fs.copyToLocalFile(false, pathAnnot, new Path(localPathAnnot), true)
+    val isAnnotToc = new DataInputStream(new FileInputStream(localPathAnnotToc))
+    val isAnnot = new DataInputStream(new FileInputStream(localPathAnnot))
     val annotBufMap = Source.fromInputStream(isAnnotToc).getLines().map(_.split('\t'))
       .map(e => (e(0), e(1).toLong, e(2).toLong))
       .filter(e => e._1 matches keyFilter)
@@ -754,12 +763,13 @@ object AnnotatedSuccinctPartition {
         val key = e._1
         val annotClass = key.split('^')(1)
         val annotType = key.split('^')(2)
-        val isAnnot = fs.open(pathAnnot)
-        isAnnot.seek(e._2)
         val buf = new SuccinctAnnotationBuffer(annotClass, annotType, isAnnot)
-        isAnnot.close()
         (key, buf)
       }).toMap
+    isAnnotToc.close()
+    new File(localPathAnnotToc).delete()
+    isAnnot.close()
+    new File(localPathAnnot).delete()
 
     new AnnotatedSuccinctPartition(keys, documentBuffer, annotBufMap)
   }
