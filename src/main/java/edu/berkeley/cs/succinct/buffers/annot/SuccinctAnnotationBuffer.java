@@ -1,6 +1,7 @@
 package edu.berkeley.cs.succinct.buffers.annot;
 
 import edu.berkeley.cs.succinct.buffers.SuccinctIndexedFileBuffer;
+import edu.berkeley.cs.succinct.util.SuccinctConfiguration;
 import edu.berkeley.cs.succinct.util.SuccinctConstants;
 
 import java.io.*;
@@ -25,7 +26,7 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
    */
   public SuccinctAnnotationBuffer(String annotClass, String annotType, int[] docIdIndexes,
     int[] annotationOffsets, byte[] input, long numAnnots) {
-    super(input, annotationOffsets);
+    super(input, annotationOffsets, new SuccinctConfiguration(1073741824, 32, 128));
     this.annotClass = annotClass;
     this.annotType = annotType;
     this.docIdIndexes = docIdIndexes;
@@ -57,7 +58,7 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
    */
   public static void construct(byte[] input, int[] offsets, int[] docIdIndexes, long numAnnots,
     DataOutputStream os) throws IOException {
-    construct(input, offsets, os);
+    construct(input, offsets, os, new SuccinctConfiguration(1073741824, 32, 128));
     os.writeInt(docIdIndexes.length);
     for (int i = 0; i < docIdIndexes.length; i++) {
       os.writeInt(docIdIndexes[i]);

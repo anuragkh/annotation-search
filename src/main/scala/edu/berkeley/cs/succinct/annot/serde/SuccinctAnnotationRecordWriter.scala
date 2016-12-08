@@ -4,6 +4,7 @@ import java.io.{DataOutputStream, FileOutputStream, File, ObjectOutputStream}
 
 import edu.berkeley.cs.succinct.buffers.SuccinctIndexedFileBuffer
 import edu.berkeley.cs.succinct.buffers.annot.SuccinctAnnotationBuffer
+import edu.berkeley.cs.succinct.util.SuccinctConfiguration
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.io.NullWritable
@@ -49,7 +50,7 @@ class SuccinctAnnotationRecordWriter(path: Path, ignoreParseErrors: Boolean, con
     val pathDoc = File.createTempFile("part-" + "%05d".format(i) + ".sdocs", ".tmp", tmpDir)
     pathDoc.deleteOnExit()
     val osDoc = new DataOutputStream(new FileOutputStream(pathDoc))
-    SuccinctIndexedFileBuffer.construct(docTextBuffer._2, docTextBuffer._1, osDoc)
+    SuccinctIndexedFileBuffer.construct(docTextBuffer._2, docTextBuffer._1, osDoc, new SuccinctConfiguration())
     osDoc.close()
     val per2EndTime = System.currentTimeMillis()
     println("Partition " + i + ": Doc. txt (" + docTextBuffer._2.length / (1024 * 1024)
