@@ -70,7 +70,8 @@ class SuccinctAnnotationRecordWriter(path: Path, ignoreParseErrors: Boolean, con
 
       // Write Succinct annotationBuffer to persistent store.
       val buffers = kv._2.read
-      SuccinctAnnotationBuffer.construct(buffers._3, buffers._2, buffers._1, osAnnot)
+      val numAnnots = kv._2.getNumAnnotations()
+      SuccinctAnnotationBuffer.construct(buffers._3, buffers._2, buffers._1, numAnnots, osAnnot)
       totAnnotBytes += buffers._3.length
       val endPos = osAnnot.size()
       val size = endPos - startPos

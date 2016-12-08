@@ -12,6 +12,7 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
   private transient String annotClass;
   private transient String annotType;
   private transient int[] docIdIndexes;
+  private transient long numAnnots;
 
   /**
    * Constructor to initialize from input byte array.
@@ -23,11 +24,12 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
    * @param input             The input byte array.
    */
   public SuccinctAnnotationBuffer(String annotClass, String annotType, int[] docIdIndexes,
-    int[] annotationOffsets, byte[] input) {
+    int[] annotationOffsets, byte[] input, long numAnnots) {
     super(input, annotationOffsets);
     this.annotClass = annotClass;
     this.annotType = annotType;
     this.docIdIndexes = docIdIndexes;
+    this.numAnnots = numAnnots;
   }
 
   /**
@@ -53,13 +55,14 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
    * @param docIdIndexes The document ID indexes (pointers into array containing docIds).
    * @param os           The data output stream to write the data to.
    */
-  public static void construct(byte[] input, int[] offsets, int[] docIdIndexes, DataOutputStream os)
-    throws IOException {
+  public static void construct(byte[] input, int[] offsets, int[] docIdIndexes, long numAnnots,
+    DataOutputStream os) throws IOException {
     construct(input, offsets, os);
     os.writeInt(docIdIndexes.length);
     for (int i = 0; i < docIdIndexes.length; i++) {
       os.writeInt(docIdIndexes[i]);
     }
+    os.writeLong(numAnnots);
   }
 
   /**
@@ -87,6 +90,15 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
    */
   public String getAnnotType() {
     return annotType;
+  }
+
+  /**
+   * Get the number of annotations.
+   *
+   * @return The number of annotations.
+   */
+  public long getNumAnnots() {
+    return numAnnots;
   }
 
   /**
@@ -167,6 +179,7 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
     for (int i = 0; i < docIdIndexes.length; i++) {
       os.writeInt(docIdIndexes[i]);
     }
+    os.writeLong(numAnnots);
   }
 
   /**
@@ -182,6 +195,7 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
     for (int i = 0; i < docIdIndexes.length; i++) {
       docIdIndexes[i] = is.readInt();
     }
+    numAnnots = is.readLong();
   }
 
   /**
@@ -194,6 +208,7 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
     oos.writeObject(annotClass);
     oos.writeObject(annotType);
     oos.writeObject(docIdIndexes);
+    oos.writeObject(numAnnots);
   }
 
   /**
@@ -206,5 +221,6 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
     annotClass = (String) ois.readObject();
     annotType = (String) ois.readObject();
     docIdIndexes = (int[]) ois.readObject();
+    numAnnots = (Long) ois.readObject();
   }
 }

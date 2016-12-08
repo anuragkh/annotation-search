@@ -33,7 +33,7 @@ case class Regex(query: String) extends Operator
   * @param textFilter       Arbitrary metadataFilter function to apply on document text corresponding to the
   *                         annotation.
   */
-case class FilterAnnotations(annotClassFilter: String, annotTypeFilter: String,
+case class FilterAnnotations(annotClassFilter: String, annotTypeFilter: String = ".*",
                              metadataFilter: String => Boolean = null,
                              textFilter: String => Boolean = null) extends Operator
 

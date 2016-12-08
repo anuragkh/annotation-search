@@ -98,6 +98,10 @@ abstract class AnnotatedSuccinctRDD(@transient private val sc: SparkContext,
     partitionsRDD.flatMap(_.query(operator))
   }
 
+  def count(operator: Operator): Long = {
+    partitionsRDD.map(_.count(operator)).collect().sum
+  }
+
   /**
     * Saves the [[AnnotatedSuccinctRDD]] at the specified path.
     *
@@ -282,7 +286,8 @@ object AnnotatedSuccinctRDD {
       val annotClass = key.split('^')(1)
       val annotType = key.split('^')(2)
       val buffers = kv._2.read
-      (key, new SuccinctAnnotationBuffer(annotClass, annotType, buffers._1, buffers._2, buffers._3))
+      val numAnnots = kv._2.getNumAnnotations()
+      (key, new SuccinctAnnotationBuffer(annotClass, annotType, buffers._1, buffers._2, buffers._3, numAnnots))
     })
     Iterator(new AnnotatedSuccinctPartition(docIds, succinctDocTextBuffer, succinctAnnotBufferMap))
   }

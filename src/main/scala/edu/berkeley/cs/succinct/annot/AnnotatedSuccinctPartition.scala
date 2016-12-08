@@ -156,6 +156,14 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
   }
 
   /**
+    * Count the number of occurrences of a query string in the document texts.
+    *
+    * @param query The query string to search for,
+    * @return The number of matches for the query string.
+    */
+  def count(query: String): Long = documentBuffer.count(query.toCharArray)
+
+  /**
     * Search for a regex pattern in the document texts.
     *
     * @param query The regex pattern to search for.
@@ -180,6 +188,14 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
   }
 
   /**
+    * Count the number of occurrences of a regex pattern in the document texts.
+    *
+    * @param query The regex pattern to search for.
+    * @return The number of matches for the regex query.
+    */
+  def regexCount(query: String): Long = documentBuffer.regexSearch(query).size()
+
+  /**
     * Filter annotations in this partition by the annotation class, annotation type and the
     * annotation metadata.
     *
@@ -192,7 +208,7 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
                         metadataFilter: String => Boolean,
                         textFilter: String => Boolean): Iterator[Result] = {
     val delim = "\\" + SuccinctAnnotationBuffer.DELIM
-    val keyFilter = delim + annotClassFilter + delim + annotTypeFilter + delim
+    val keyFilter = delim + "(" + annotClassFilter + ")" + delim + "(" + annotTypeFilter + ")" + delim
     annotBufferMap.filterKeys(_ matches keyFilter).values.map(buf => {
       new Iterator[Annotation] {
         var curRecordIdx = -1
@@ -225,6 +241,12 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
       .map(a => Result(a.getDocId, a.getStartOffset, a.getEndOffset, a))
   }
 
+  def filterAnnotationsCount(annotClassFilter: String, annotTypeFilter: String): Long = {
+    val delim = "\\" + SuccinctAnnotationBuffer.DELIM
+    val keyFilter = delim + "(" + annotClassFilter + ")" + delim + "(" + annotTypeFilter + ")" + delim
+    annotBufferMap.filterKeys(_ matches keyFilter).values.map(buf => buf.getNumAnnots).sum
+  }
+
   /**
     * Generic method for handling A op B operations where A is FilterAnnotation, and B is any
     * operation
@@ -242,7 +264,7 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
                     it: Iterator[Result],
                     op: (AnnotationRecord, Int, Int) => Array[Annotation]): Iterator[Result] = {
     val delim = "\\" + SuccinctAnnotationBuffer.DELIM
-    val keyFilter = delim + annotClassFilter + delim + annotTypeFilter + delim
+    val keyFilter = delim + "(" + annotClassFilter + ")" + delim + "(" + annotTypeFilter + ")" + delim
     val buffers = annotBufferMap.filterKeys(_ matches keyFilter).values.toSeq
 
     if (buffers.isEmpty) return Iterator[Result]()
@@ -410,7 +432,7 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
   def opAnnotations(it: Iterator[Result], annotClassFilter: String, annotTypeFilter: String,
                     op: (AnnotationRecord, Int, Int) => Boolean): Iterator[Result] = {
     val delim = "\\" + SuccinctAnnotationBuffer.DELIM
-    val keyFilter = delim + annotClassFilter + delim + annotTypeFilter + delim
+    val keyFilter = delim + "(" + annotClassFilter + ")" + delim + "(" + annotTypeFilter + ")" + delim
     val buffers = annotBufferMap.filterKeys(_ matches keyFilter).values.toSeq
 
     if (buffers.isEmpty) return Iterator[Result]()
@@ -699,6 +721,16 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
     }
   }
 
+  def count(operator: Operator): Long = {
+    operator match {
+      case Search(query) => count(query)
+      case Regex(query) => regexCount(query)
+      case FilterAnnotations(acFilter, atFilter, null, null) =>
+        filterAnnotationsCount(acFilter, atFilter)
+      case other => query(other).size
+    }
+  }
+
   /**
     * Get the first and the last document ID in this partition.
     *
@@ -747,7 +779,7 @@ object AnnotatedSuccinctPartition {
     new File(localPathDocIds).delete()
 
     val delim = "\\" + SuccinctAnnotationBuffer.DELIM
-    val keyFilter = delim + annotClassFilter + delim + annotTypeFilter + delim
+    val keyFilter = delim + "(" + annotClassFilter + ")" + delim + "(" + annotTypeFilter + ")" + delim
     val pathAnnotToc = new Path(partitionLocation + ".sannots.toc")
     val localPathAnnotToc = tmpDir + File.separator + pathAnnotToc.getName + ".tmp"
     fs.copyToLocalFile(false, pathAnnotToc, new Path(localPathAnnotToc), true)

@@ -69,6 +69,7 @@ class AnnotatedDocumentSerializer(ignoreParseErrors: Boolean = true, conf: (Bool
         val dat = kv._2.map(_._2).sortBy(_._2)
         annotEntry.writeDocIdIdx(docIdOffset)
         annotEntry.writeOffset(annotEntry.bufStream.size())
+        annotEntry.incrementNumAnnotations(dat.length)
         serializeAnnotationRecord(dat, annotEntry.bufStream)
       })
   }

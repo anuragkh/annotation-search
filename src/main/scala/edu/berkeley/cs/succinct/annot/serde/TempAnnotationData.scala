@@ -6,6 +6,12 @@ import edu.berkeley.cs.succinct.util.SuccinctConstants
 
 trait TempAnnotationData {
 
+  var numAnnotations: Long = 0
+
+  def incrementNumAnnotations(num: Long): Unit = numAnnotations += num
+
+  def getNumAnnotations(): Long = numAnnotations
+
   def bufStream: DataOutputStream
 
   def writeOffset(offset: Int): Unit
