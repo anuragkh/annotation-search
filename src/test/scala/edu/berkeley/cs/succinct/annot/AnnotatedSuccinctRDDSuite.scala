@@ -57,19 +57,23 @@ class AnnotatedSuccinctRDDSuite extends FunSuite with LocalSparkContext {
     assert(res1 contains Result("doc2", 0, 8, null))
     assert(res1 contains Result("doc3", 0, 8, null))
     assert(res1.length == 3)
+    assert(annotatedSuccinctRDD.count(Search("Document")) == 3)
 
     val res2 = annotatedSuccinctRDD.query(Search("number")).collect()
     assert(res2 contains Result("doc1", 9, 15, null))
     assert(res2 contains Result("doc2", 9, 15, null))
     assert(res2 contains Result("doc3", 9, 15, null))
     assert(res2.length == 3)
+    assert(annotatedSuccinctRDD.count(Search("number")) == 3)
 
     val res3 = annotatedSuccinctRDD.query(Search("three")).collect()
     assert(res3 contains Result("doc3", 16, 21, null))
     assert(res3.length == 1)
+    assert(annotatedSuccinctRDD.count(Search("three")) == 1)
 
     val res4 = annotatedSuccinctRDD.query(Search("four")).collect()
     assert(res4.length == 0)
+    assert(annotatedSuccinctRDD.count(Search("four")) == 0)
   }
 
   test("Test Regex") {
@@ -83,14 +87,17 @@ class AnnotatedSuccinctRDDSuite extends FunSuite with LocalSparkContext {
     assert(res1 contains Result("doc1", 16, 19, null))
     assert(res1 contains Result("doc2", 16, 19, null))
     assert(res1.length == 2)
+    assert(annotatedSuccinctRDD.count(Regex("one|two")) == 2)
 
     val res2 = annotatedSuccinctRDD.query(Regex("two|three")).collect()
     assert(res2 contains Result("doc2", 16, 19, null))
     assert(res2 contains Result("doc3", 16, 21, null))
     assert(res2.length == 2)
+    assert(annotatedSuccinctRDD.count(Regex("two|three")) == 2)
 
     val res3 = annotatedSuccinctRDD.query(Regex("four|five|six")).collect()
     assert(res3.length == 0)
+    assert(annotatedSuccinctRDD.count(Regex("four|five|six")) == 0)
   }
 
   test("Test FilterAnnotations") {
@@ -105,6 +112,7 @@ class AnnotatedSuccinctRDDSuite extends FunSuite with LocalSparkContext {
       assert(r.annotation.getAnnotClass == "ge")
       assert(r.annotation.getAnnotType == "word")
     })
+    assert(annotatedSuccinctRDD.count(FilterAnnotations("ge", "word")) == 9)
 
     val geSpaces = annotatedSuccinctRDD.query(FilterAnnotations("ge", "space")).collect()
     assert(geSpaces.length == 6)
@@ -112,6 +120,7 @@ class AnnotatedSuccinctRDDSuite extends FunSuite with LocalSparkContext {
       assert(r.annotation.getAnnotClass == "ge")
       assert(r.annotation.getAnnotType == "space")
     })
+    assert(annotatedSuccinctRDD.count(FilterAnnotations("ge", "space")) == 6)
 
     val geAll = annotatedSuccinctRDD.query(FilterAnnotations("ge", ".*")).collect()
     assert(geAll.length == 15)
@@ -119,6 +128,15 @@ class AnnotatedSuccinctRDDSuite extends FunSuite with LocalSparkContext {
       assert(a.annotation.getAnnotClass == "ge")
       assert(a.annotation.getAnnotType == "word" || a.annotation.getAnnotType == "space")
     })
+    assert(annotatedSuccinctRDD.count(FilterAnnotations("ge", ".*")) == 15)
+
+    val geOr = annotatedSuccinctRDD.query(FilterAnnotations("ge", "word|space")).collect()
+    assert(geOr.length == 15)
+    geOr.foreach(a => {
+      assert(a.annotation.getAnnotClass == "ge")
+      assert(a.annotation.getAnnotType == "word" || a.annotation.getAnnotType == "space")
+    })
+    assert(annotatedSuccinctRDD.count(FilterAnnotations("ge", "word|space")) == 15)
 
     val geWords2 = annotatedSuccinctRDD.query(FilterAnnotations("ge", "word", _.contains("ba"))).collect()
     assert(geWords2.length == 2)

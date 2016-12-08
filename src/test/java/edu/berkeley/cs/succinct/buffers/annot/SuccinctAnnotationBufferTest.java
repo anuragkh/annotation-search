@@ -25,7 +25,7 @@ public class SuccinctAnnotationBufferTest extends TestCase {
   private final int[] docIdIndexes = {0, 1, 2};
   private final int[] aOffsets = {0, 55, 101};
   private final SuccinctAnnotationBuffer buf =
-    new SuccinctAnnotationBuffer("ge", "word", docIdIndexes, aOffsets, test);
+    new SuccinctAnnotationBuffer("ge", "word", docIdIndexes, aOffsets, test, 9);
 
   // (0, 8), (9, 15), (16, 19)
   private final int[] startOffsets = {0, 9, 16};
@@ -329,7 +329,7 @@ public class SuccinctAnnotationBufferTest extends TestCase {
   public void testConstruct() throws Exception {
     FileOutputStream fos = new FileOutputStream(testOutput);
     DataOutputStream os = new DataOutputStream(fos);
-    SuccinctAnnotationBuffer.construct(test, aOffsets, docIdIndexes, os);
+    SuccinctAnnotationBuffer.construct(test, aOffsets, docIdIndexes, 9, os);
     os.close();
 
     // Deserialize data

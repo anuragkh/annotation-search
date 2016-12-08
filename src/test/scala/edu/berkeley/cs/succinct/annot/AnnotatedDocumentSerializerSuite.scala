@@ -36,6 +36,7 @@ class AnnotatedDocumentSerializerSuite extends FunSuite {
     val geWordDocIdOffsets = geWordData._1
     val geWordOffsets = geWordData._2
     assert(geWordOffsets === Array[Int](0, 55, 101))
+    assert(annotBuffers("^ge^word^").getNumAnnotations() == 9)
     val geWordBuffer = geWordData._3
 
     val geWordBais = new ByteArrayInputStream(geWordBuffer)
@@ -45,6 +46,7 @@ class AnnotatedDocumentSerializerSuite extends FunSuite {
     val geSpaceDocIdOffsets = geSpaceData._1
     val geSpaceOffsets = geSpaceData._2
     assert(geSpaceOffsets === Array[Int](0, 32, 64))
+    assert(annotBuffers("^ge^space^").getNumAnnotations() == 6)
     val geSpaceBuffer = geSpaceData._3
     val geSpaceBais = new ByteArrayInputStream(geSpaceBuffer)
     val geSpaceIn = new DataInputStream(geSpaceBais)
