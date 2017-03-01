@@ -338,7 +338,8 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
         curAnnot = nextAnnot
         Result(annot.getDocId, annot.getStartOffset, annot.getEndOffset, annot)
       }
-    }.filter(r => metadataFilter(r.annotation.getMetadata))
+    }.filter(r => (metadataFilter == null || metadataFilter(r.annotation.getMetadata)) &&
+      (textFilter == null || textFilter(extractDocument(r.docId, r.startOffset, r.endOffset - r.startOffset))))
   }
 
   /**
@@ -689,32 +690,32 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
         (a, b) match {
           case (_, FilterAnnotations(acFilter, atFilter, mFilter, tFilter)) =>
             opContainingAnnotations(query(a), acFilter, atFilter, mFilter, tFilter)
-          //          case (FilterAnnotations(acFilter, atFilter, mFilter, tFilter), _) =>
-          //            annotationsContainingOp(acFilter, atFilter, mFilter, tFilter, query(b))
+          case (FilterAnnotations(acFilter, atFilter, mFilter, tFilter), _) =>
+            annotationsContainingOp(acFilter, atFilter, mFilter, tFilter, query(b))
           case _ => opContainingOp(query(a), query(b))
         }
       case ContainedIn(a, b) =>
         (a, b) match {
           case (_, FilterAnnotations(acFilter, atFilter, mFilter, tFilter)) =>
             opContainedInAnnotations(query(a), acFilter, atFilter, mFilter, tFilter)
-          //          case (FilterAnnotations(acFilter, atFilter, mFilter, tFilter), _) =>
-          //            annotationsContainedInOp(acFilter, atFilter, mFilter, tFilter, query(b))
+          case (FilterAnnotations(acFilter, atFilter, mFilter, tFilter), _) =>
+            annotationsContainedInOp(acFilter, atFilter, mFilter, tFilter, query(b))
           case _ => opContainedInOp(query(a), query(b))
         }
       case Before(a, b, range) =>
         (a, b) match {
           case (_, FilterAnnotations(acFilter, atFilter, mFilter, tFilter)) =>
             opBeforeAnnotations(query(a), acFilter, atFilter, mFilter, tFilter, range)
-          //          case (FilterAnnotations(acFilter, atFilter, mFilter, tFilter), _) =>
-          //            annotationsBeforeOp(acFilter, atFilter, mFilter, tFilter, query(b), range)
+          case (FilterAnnotations(acFilter, atFilter, mFilter, tFilter), _) =>
+            annotationsBeforeOp(acFilter, atFilter, mFilter, tFilter, query(b), range)
           case _ => opBeforeOp(query(a), query(b), range)
         }
       case After(a, b, range) =>
         (a, b) match {
           case (_, FilterAnnotations(acFilter, atFilter, mFilter, tFilter)) =>
             opAfterAnnotations(query(a), acFilter, atFilter, mFilter, tFilter, range)
-          //          case (FilterAnnotations(acFilter, atFilter, mFilter, tFilter), _) =>
-          //            annotationsAfterOp(acFilter, atFilter, mFilter, tFilter, query(b), range)
+          case (FilterAnnotations(acFilter, atFilter, mFilter, tFilter), _) =>
+            annotationsAfterOp(acFilter, atFilter, mFilter, tFilter, query(b), range)
           case _ => opAfterOp(query(a), query(b), range)
         }
       case unknown => throw new UnsupportedOperationException(s"Operation $unknown not supported.")
