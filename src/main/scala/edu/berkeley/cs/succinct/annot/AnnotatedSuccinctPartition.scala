@@ -164,7 +164,7 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
     * @param query The query string to search for,
     * @return The number of matches for the query string.
     */
-  def count(query: String): Long = documentBuffer.count(query.toCharArray)
+  def count(query: String): Int = documentBuffer.count(query.toCharArray).toInt
 
   /**
     * Search for a regex pattern in the document texts.
@@ -244,10 +244,10 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
       .map(a => Result(a.getDocId, a.getStartOffset, a.getEndOffset, a))
   }
 
-  def filterAnnotationsCount(annotClassFilter: String, annotTypeFilter: String): Long = {
+  def filterAnnotationsCount(annotClassFilter: String, annotTypeFilter: String): Int = {
     val delim = "\\" + SuccinctAnnotationBuffer.DELIM
     val keyFilter = delim + "(" + annotClassFilter + ")" + delim + "(" + annotTypeFilter + ")" + delim
-    annotBufferMap.filterKeys(_ matches keyFilter).values.map(buf => buf.getNumAnnots).sum
+    annotBufferMap.filterKeys(_ matches keyFilter).values.map(buf => buf.getNumAnnots).sum.toInt
   }
 
   /**
@@ -724,13 +724,13 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
     }
   }
 
-  def count(operator: Operator): Long = {
+  def count(operator: Operator): Int = {
     operator match {
       case Search(query) => count(query)
-      case Regex(query) => Long.valueOf(regexCount(query))
+      case Regex(query) => regexCount(query)
       case FilterAnnotations(acFilter, atFilter, null, null) =>
         filterAnnotationsCount(acFilter, atFilter)
-      case other => Long.valueOf(query(other).size)
+      case other => query(other).size
     }
   }
 
