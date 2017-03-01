@@ -1,12 +1,15 @@
 package org.apache.spark.succinct.annot
 
 import java.io._
+import java.lang.Long
+import java.util
 import java.util.NoSuchElementException
 
 import edu.berkeley.cs.succinct.SuccinctIndexedFile
 import edu.berkeley.cs.succinct.annot._
 import edu.berkeley.cs.succinct.buffers.SuccinctIndexedFileBuffer
 import edu.berkeley.cs.succinct.buffers.annot._
+import edu.berkeley.cs.succinct.regex.RegExMatch
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.util.{KnownSizeEstimation, SizeEstimator}
@@ -139,8 +142,8 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
     */
   def search(query: String): Iterator[Result] = {
     new Iterator[Result] {
-      val searchIterator = documentBuffer.searchIterator(query.toCharArray)
-      val matchLength = query.length
+      val searchIterator: util.Iterator[Long] = documentBuffer.searchIterator(query.toCharArray)
+      val matchLength: Int = query.length
 
       override def hasNext: Boolean = searchIterator.hasNext
 
@@ -171,7 +174,7 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
     */
   def regexSearch(query: String): Iterator[Result] = {
     new Iterator[Result] {
-      val matches = documentBuffer.regexSearch(query).iterator()
+      val matches: util.Iterator[RegExMatch] = documentBuffer.regexSearch(query).iterator()
 
       override def hasNext: Boolean = matches.hasNext
 
@@ -193,7 +196,7 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
     * @param query The regex pattern to search for.
     * @return The number of matches for the regex query.
     */
-  def regexCount(query: String): Long = documentBuffer.regexSearch(query).size()
+  def regexCount(query: String): Int = documentBuffer.regexSearch(query).size()
 
   /**
     * Filter annotations in this partition by the annotation class, annotation type and the
@@ -211,8 +214,8 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
     val keyFilter = delim + "(" + annotClassFilter + ")" + delim + "(" + annotTypeFilter + ")" + delim
     annotBufferMap.filterKeys(_ matches keyFilter).values.map(buf => {
       new Iterator[Annotation] {
-        var curRecordIdx = -1
-        var annotationIterator = nextAnnotationRecordIterator
+        var curRecordIdx: Int = -1
+        var annotationIterator: Iterator[Annotation] = nextAnnotationRecordIterator
 
         def nextAnnotationRecordIterator: Iterator[Annotation] = {
           curRecordIdx += 1
@@ -271,7 +274,7 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
 
     implicit class IteratorWrapper[T](it: Iterator[T]) {
       def distinct = new Iterator[T] {
-        var distinctStream = it.toStream.distinct
+        var distinctStream: Stream[T] = it.toStream.distinct
 
         override def hasNext: Boolean = distinctStream.nonEmpty
 
@@ -284,10 +287,10 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
     }
 
     new Iterator[Result] {
-      var seenSoFar = Set[Annotation]()
-      var curBufIdx = buffers.length - 1
-      var curAnnotIdx = -1
-      var curRes: Result = null
+      var seenSoFar: Set[Annotation] = Set[Annotation]()
+      var curBufIdx: Int = buffers.length - 1
+      var curAnnotIdx: Int = -1
+      var curRes: Result = _
       var curAnnots: Array[Annotation] = nextAnnots
       var curAnnot: Annotation = nextAnnot
 
@@ -438,7 +441,7 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
     if (buffers.isEmpty) return Iterator[Result]()
 
     new Iterator[Result] {
-      var curBufIdx = buffers.length - 1
+      var curBufIdx: Int = buffers.length - 1
       var curRes: Result = nextRes
 
       def nextRes: Result = {
@@ -593,7 +596,7 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
                condition: (Result, Result) => Boolean): Iterator[Result] = {
     // TODO: We can optimize if both iterators are sorted
     new Iterator[Result]() {
-      val it2Stream = it2.toStream
+      val it2Stream: Stream[Result] = it2.toStream
       var curRes: Result = nextRes
 
       def nextRes: Result = {
@@ -724,10 +727,10 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
   def count(operator: Operator): Long = {
     operator match {
       case Search(query) => count(query)
-      case Regex(query) => regexCount(query)
+      case Regex(query) => Long.valueOf(regexCount(query))
       case FilterAnnotations(acFilter, atFilter, null, null) =>
         filterAnnotationsCount(acFilter, atFilter)
-      case other => query(other).size
+      case other => Long.valueOf(query(other).size)
     }
   }
 
