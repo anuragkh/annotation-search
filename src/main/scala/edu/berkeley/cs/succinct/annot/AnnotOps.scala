@@ -81,4 +81,19 @@ case class After(A: Operator, B: Operator, distance: Int = -1) extends Operator
   * @param endOffset   The end offset.
   * @param annotation  Associated annotation, if any.
   */
-case class Result(docId: String, startOffset: Int, endOffset: Int, annotation: Annotation)
+case class Result(docId: String, startOffset: Int, endOffset: Int, annotation: Annotation) {
+
+  def canEqual(a: Any) = a.isInstanceOf[Result]
+
+  override def equals(that: Any): Boolean = {
+    that match {
+      case o: Result => {
+        o.canEqual(this) &&
+          (docId.equals(o.docId) && startOffset.equals(o.startOffset) && endOffset.equals(o.endOffset))
+      }
+      case _ => false
+    }
+  }
+
+  override def hashCode(): Int = docId.hashCode + startOffset + endOffset
+}
