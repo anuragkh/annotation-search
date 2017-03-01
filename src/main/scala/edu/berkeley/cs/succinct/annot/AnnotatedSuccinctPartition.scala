@@ -1,15 +1,12 @@
 package org.apache.spark.succinct.annot
 
 import java.io._
-import java.lang.Long
-import java.util
 import java.util.NoSuchElementException
 
 import edu.berkeley.cs.succinct.SuccinctIndexedFile
 import edu.berkeley.cs.succinct.annot._
 import edu.berkeley.cs.succinct.buffers.SuccinctIndexedFileBuffer
 import edu.berkeley.cs.succinct.buffers.annot._
-import edu.berkeley.cs.succinct.regex.RegExMatch
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.util.{KnownSizeEstimation, SizeEstimator}
@@ -142,7 +139,7 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
     */
   def search(query: String): Iterator[Result] = {
     new Iterator[Result] {
-      val searchIterator: util.Iterator[Long] = documentBuffer.searchIterator(query.toCharArray)
+      val searchIterator = documentBuffer.searchIterator(query.toCharArray)
       val matchLength: Int = query.length
 
       override def hasNext: Boolean = searchIterator.hasNext
@@ -174,7 +171,7 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
     */
   def regexSearch(query: String): Iterator[Result] = {
     new Iterator[Result] {
-      val matches: util.Iterator[RegExMatch] = documentBuffer.regexSearch(query).iterator()
+      val matches = documentBuffer.regexSearch(query).iterator()
 
       override def hasNext: Boolean = matches.hasNext
 
