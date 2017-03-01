@@ -100,7 +100,12 @@ public class Annotation implements Serializable {
 
     Annotation a = (Annotation) o;
 
-    return docId.equals(a.docId) && id == a.id && annotType.equals(a.annotType) &&
-      annotClass.equals(a.annotClass) && startOffset == a.startOffset && endOffset == a.endOffset;
+    return docId.equals(a.docId) && id == a.id && annotType.equals(a.annotType) && annotClass
+      .equals(a.annotClass) && startOffset == a.startOffset && endOffset == a.endOffset;
+  }
+
+  public int hashCode() {
+    return docId.hashCode() + id + annotType.hashCode() + annotClass.hashCode() + startOffset
+      + endOffset;
   }
 }
