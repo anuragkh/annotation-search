@@ -167,15 +167,23 @@ object AnnotatedSuccinctRDD {
     * @param inputRDD RDD of (documentID, documentText, annotations) triplets.
     * @return The [[AnnotatedSuccinctRDD]].
     */
-  def apply(inputRDD: RDD[(String, String, String)]): AnnotatedSuccinctRDD = {
+  def apply(inputRDD: RDD[(String, String, String)], numPartitions: Int = 0): AnnotatedSuccinctRDD = {
     val sc = inputRDD.sparkContext
     val constructConf = getConstructionConf(sc)
     val ignoreParseErrors = sc.getConf.get("succinct.annotations.ignoreParseErrors", "true").toBoolean
-    val partitionsRDD = inputRDD.sortBy(_._1)
-      .mapPartitionsWithIndex((idx, it) => {
-        createAnnotatedSuccinctPartition(it, ignoreParseErrors, constructConf)
-      }).cache()
-    new AnnotatedSuccinctRDDImpl(partitionsRDD)
+    if (numPartitions == 0) {
+      val partitionsRDD = inputRDD.sortBy(_._1)
+        .mapPartitionsWithIndex((idx, it) => {
+          createAnnotatedSuccinctPartition(it, ignoreParseErrors, constructConf)
+        }).cache()
+      new AnnotatedSuccinctRDDImpl(partitionsRDD)
+    } else {
+      val partitionsRDD = inputRDD.sortBy(_._1).repartition(numPartitions)
+        .mapPartitionsWithIndex((idx, it) => {
+          createAnnotatedSuccinctPartition(it, ignoreParseErrors, constructConf)
+        }).cache()
+      new AnnotatedSuccinctRDDImpl(partitionsRDD)
+    }
   }
 
   /**
@@ -185,7 +193,7 @@ object AnnotatedSuccinctRDD {
     * @param location Output path for the data.
     */
   def construct(inputRDD: RDD[(String, String, String)], location: String,
-                conf: Configuration = new Configuration()) {
+                numPartitions: Int = 0, conf: Configuration = new Configuration()) {
 
     val path = new Path(location)
     val fs = FileSystem.get(path.toUri, conf)
@@ -196,29 +204,56 @@ object AnnotatedSuccinctRDD {
     val serializableConf = new SerializableWritable(conf)
     val now = new Date()
 
-    inputRDD.sortBy(_._1).mapPartitionsWithIndex((i, it) => Iterator((i, it))).foreach(part => {
-      val i = part._1
-      val conf = serializableConf.value
-      val job = Job.getInstance(conf)
-      job.setOutputKeyClass(classOf[NullWritable])
-      job.setOutputFormatClass(classOf[SuccinctAnnotationOutputFormat])
-      FileOutputFormat.setOutputPath(job, new Path(location))
+    if (numPartitions == 0) {
+      inputRDD.sortBy(_._1).mapPartitionsWithIndex((i, it) => Iterator((i, it))).foreach(part => {
+        val i = part._1
+        val conf = serializableConf.value
+        val job = Job.getInstance(conf)
+        job.setOutputKeyClass(classOf[NullWritable])
+        job.setOutputFormatClass(classOf[SuccinctAnnotationOutputFormat])
+        FileOutputFormat.setOutputPath(job, new Path(location))
 
-      val formatter = new SimpleDateFormat("yyyyMMddHHmmss")
-      val jobtrackerID = formatter.format(now)
-      val attemptNumber = 1
+        val formatter = new SimpleDateFormat("yyyyMMddHHmmss")
+        val jobtrackerID = formatter.format(now)
+        val attemptNumber = 1
 
-      val attemptID = SuccinctHadoopMapReduceUtil.newTaskAttemptID(jobtrackerID, i, isMap = false, i, attemptNumber)
-      val hadoopContext = SuccinctHadoopMapReduceUtil.newTaskAttemptContext(job.getConfiguration, attemptID)
+        val attemptID = SuccinctHadoopMapReduceUtil.newTaskAttemptID(jobtrackerID, i, isMap = false, i, attemptNumber)
+        val hadoopContext = SuccinctHadoopMapReduceUtil.newTaskAttemptContext(job.getConfiguration, attemptID)
 
-      val format = new SuccinctAnnotationOutputFormat
-      val commiter = format.getOutputCommitter(hadoopContext)
-      commiter.setupTask(hadoopContext)
-      val writer = format.getRecordWriter(hadoopContext)
-      writer.write(NullWritable.get(), part)
-      writer.close(hadoopContext)
-      commiter.commitTask(hadoopContext)
-    })
+        val format = new SuccinctAnnotationOutputFormat
+        val commiter = format.getOutputCommitter(hadoopContext)
+        commiter.setupTask(hadoopContext)
+        val writer = format.getRecordWriter(hadoopContext)
+        writer.write(NullWritable.get(), part)
+        writer.close(hadoopContext)
+        commiter.commitTask(hadoopContext)
+      })
+    } else {
+      inputRDD.sortBy(_._1).repartition(numPartitions)
+        .mapPartitionsWithIndex((i, it) => Iterator((i, it))).foreach(part => {
+        val i = part._1
+        val conf = serializableConf.value
+        val job = Job.getInstance(conf)
+        job.setOutputKeyClass(classOf[NullWritable])
+        job.setOutputFormatClass(classOf[SuccinctAnnotationOutputFormat])
+        FileOutputFormat.setOutputPath(job, new Path(location))
+
+        val formatter = new SimpleDateFormat("yyyyMMddHHmmss")
+        val jobtrackerID = formatter.format(now)
+        val attemptNumber = 1
+
+        val attemptID = SuccinctHadoopMapReduceUtil.newTaskAttemptID(jobtrackerID, i, isMap = false, i, attemptNumber)
+        val hadoopContext = SuccinctHadoopMapReduceUtil.newTaskAttemptContext(job.getConfiguration, attemptID)
+
+        val format = new SuccinctAnnotationOutputFormat
+        val commiter = format.getOutputCommitter(hadoopContext)
+        commiter.setupTask(hadoopContext)
+        val writer = format.getRecordWriter(hadoopContext)
+        writer.write(NullWritable.get(), part)
+        writer.close(hadoopContext)
+        commiter.commitTask(hadoopContext)
+      })
+    }
 
     val successPath = new Path(location.stripSuffix("/") + "/_SUCCESS")
     fs.create(successPath).close()
@@ -231,8 +266,8 @@ object AnnotatedSuccinctRDD {
     * @param location The path to read the [[AnnotatedSuccinctRDD]] from.
     * @return The [[AnnotatedSuccinctRDD]].
     */
-  def apply(sc: SparkContext, location: String): AnnotatedSuccinctRDD = {
-    apply(sc, location, ".*", ".*")
+  def apply(sc: SparkContext, location: String, numPartitions: Int = 0): AnnotatedSuccinctRDD = {
+    apply(sc, location, numPartitions, ".*", ".*")
   }
 
   /**
@@ -244,7 +279,7 @@ object AnnotatedSuccinctRDD {
     * @param annotTypeFilter  Regex metadataFilter specifying which annotation types to load.
     * @return The [[AnnotatedSuccinctRDD]].
     */
-  def apply(sc: SparkContext, location: String, annotClassFilter: String, annotTypeFilter: String): AnnotatedSuccinctRDD = {
+  def apply(sc: SparkContext, location: String, numPartitions: Int = 0, annotClassFilter: String, annotTypeFilter: String): AnnotatedSuccinctRDD = {
     val locationPath = new Path(location)
     val fs = FileSystem.get(locationPath.toUri, sc.hadoopConfiguration)
     val status = fs.listStatus(locationPath, new PathFilter {
@@ -252,10 +287,10 @@ object AnnotatedSuccinctRDD {
         path.getName.startsWith("part-") && path.getName.endsWith(".sdocs")
       }
     })
-    val numPartitions = status.length
+    val n = if (numPartitions == 0) status.length else Math.min(numPartitions, status.length)
     val dirs = sc.getConf.get("spark.local.dir", System.getProperty("java.io.tmpdir")).split(",")
-    val partitionsRDD = sc.parallelize(0 until numPartitions, numPartitions)
-      .mapPartitionsWithIndex[AnnotatedSuccinctPartition]((i, partition) => {
+    val partitionsRDD = sc.parallelize(0 until n, n)
+      .mapPartitionsWithIndex[AnnotatedSuccinctPartition]((i, _) => {
       val partitionLocation = location.stripSuffix("/") + "/part-" + "%05d".format(i)
       Iterator(AnnotatedSuccinctPartition(partitionLocation, annotClassFilter, annotTypeFilter, dirs(0)))
     }).cache()
