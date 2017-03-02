@@ -20,11 +20,11 @@ package object annot {
   }
 
   implicit class AnnotSuccinctRDD(rdd: RDD[(String, String, String)]) {
-    def succinctAnnotated: AnnotatedSuccinctRDD = {
-      AnnotatedSuccinctRDD(rdd)
+    def succinctAnnotated(numPartitions: Int = 0): AnnotatedSuccinctRDD = {
+      AnnotatedSuccinctRDD(rdd, numPartitions)
     }
 
-    def saveAsAnnotatedSuccinctFile(path: String, numPartitions: Int, conf: Configuration = new Configuration()): Unit = {
+    def saveAsAnnotatedSuccinctFile(path: String, numPartitions: Int = 0, conf: Configuration = new Configuration()): Unit = {
       AnnotatedSuccinctRDD.construct(rdd, path, numPartitions, conf)
     }
   }

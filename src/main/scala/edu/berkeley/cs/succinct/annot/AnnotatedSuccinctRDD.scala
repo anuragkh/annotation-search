@@ -161,13 +161,17 @@ object AnnotatedSuccinctRDD {
     (serializeInMemory, new File(dirs(0)))
   }
 
+  def apply(inputRDD: RDD[(String, String, String)]): AnnotatedSuccinctRDD = {
+    apply(inputRDD, 0)
+  }
+
   /**
     * Creates an [[AnnotatedSuccinctRDD]] from an RDD of triplets (documentID, documentText, annotations).
     *
     * @param inputRDD RDD of (documentID, documentText, annotations) triplets.
     * @return The [[AnnotatedSuccinctRDD]].
     */
-  def apply(inputRDD: RDD[(String, String, String)], numPartitions: Int = 0): AnnotatedSuccinctRDD = {
+  def apply(inputRDD: RDD[(String, String, String)], numPartitions: Int): AnnotatedSuccinctRDD = {
     val sc = inputRDD.sparkContext
     val constructConf = getConstructionConf(sc)
     val ignoreParseErrors = sc.getConf.get("succinct.annotations.ignoreParseErrors", "true").toBoolean
@@ -259,6 +263,10 @@ object AnnotatedSuccinctRDD {
     fs.create(successPath).close()
   }
 
+  def apply(sc: SparkContext, location: String): AnnotatedSuccinctRDD = {
+    apply(sc, location, 0)
+  }
+
   /**
     * Reads a AnnotatedSuccinctRDD from disk.
     *
@@ -266,7 +274,7 @@ object AnnotatedSuccinctRDD {
     * @param location The path to read the [[AnnotatedSuccinctRDD]] from.
     * @return The [[AnnotatedSuccinctRDD]].
     */
-  def apply(sc: SparkContext, location: String, numPartitions: Int = 0): AnnotatedSuccinctRDD = {
+  def apply(sc: SparkContext, location: String, numPartitions: Int): AnnotatedSuccinctRDD = {
     apply(sc, location, numPartitions, ".*", ".*")
   }
 
@@ -279,7 +287,7 @@ object AnnotatedSuccinctRDD {
     * @param annotTypeFilter  Regex metadataFilter specifying which annotation types to load.
     * @return The [[AnnotatedSuccinctRDD]].
     */
-  def apply(sc: SparkContext, location: String, numPartitions: Int = 0, annotClassFilter: String, annotTypeFilter: String): AnnotatedSuccinctRDD = {
+  def apply(sc: SparkContext, location: String, numPartitions: Int, annotClassFilter: String, annotTypeFilter: String): AnnotatedSuccinctRDD = {
     val locationPath = new Path(location)
     val fs = FileSystem.get(locationPath.toUri, sc.hadoopConfiguration)
     val status = fs.listStatus(locationPath, new PathFilter {
