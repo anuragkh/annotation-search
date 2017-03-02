@@ -140,11 +140,12 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
 
     // Extract num entries
     int nEntriesOffset = getRecordOffset(recordIdx);
-    int nEntries = extractInt(nEntriesOffset);
+    ExtractContext ctx = new ExtractContext();
+    int nEntries = extractInt(nEntriesOffset, ctx);
 
     // Get offset to data
     int dataOffset = nEntriesOffset + SuccinctConstants.INT_SIZE_BYTES;
-    return new AnnotationRecord(dataOffset, docId, nEntries, this);
+    return new AnnotationRecord(dataOffset, docId, nEntries, ctx, this);
   }
 
   /**
@@ -160,19 +161,20 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
     }
 
     // Extract num entries
-    int nEntries = extractInt(recordOffset);
+    ExtractContext ctx = new ExtractContext();
+    int nEntries = extractInt(recordOffset, ctx);
 
     // Get offset to data
     int dataOffset = recordOffset + SuccinctConstants.INT_SIZE_BYTES;
 
-    return new AnnotationRecord(dataOffset, docId, nEntries, this);
+    return new AnnotationRecord(dataOffset, docId, nEntries, ctx, this);
   }
 
   /**
    * Write Succinct data structures to a DataOutputStream.
    *
    * @param os Output stream to write data to.
-   * @throws IOException
+   * @throws IOException Throws exception when stream is bad
    */
   @Override public void writeToStream(DataOutputStream os) throws IOException {
     super.writeToStream(os);
@@ -187,7 +189,7 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
    * Read data from stream.
    *
    * @param is Input stream to read from.
-   * @throws IOException
+   * @throws IOException Throws exception when stream is bad
    */
   @Override public void readFromStream(DataInputStream is) throws IOException {
     super.readFromStream(is);
@@ -203,7 +205,7 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
    * Serialize SuccinctIndexedBuffer to OutputStream.
    *
    * @param oos ObjectOutputStream to write to.
-   * @throws IOException
+   * @throws IOException Throws exception when stream is bad
    */
   private void writeObject(ObjectOutputStream oos) throws IOException {
     oos.writeObject(annotClass);
@@ -216,7 +218,7 @@ public class SuccinctAnnotationBuffer extends SuccinctIndexedFileBuffer {
    * Deserialize SuccinctIndexedBuffer from InputStream.
    *
    * @param ois ObjectInputStream to read from.
-   * @throws IOException
+   * @throws IOException Throws exception when stream is bad
    */
   private void readObject(ObjectInputStream ois) throws ClassNotFoundException, IOException {
     annotClass = (String) ois.readObject();

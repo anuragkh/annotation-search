@@ -169,7 +169,7 @@ class AnnotatedSuccinctRDDSuite extends FunSuite with LocalSparkContext {
     res1.foreach(a => {
       assert(a.annotation.getStartOffset == 0)
       assert(a.annotation.getEndOffset == 8)
-      assert(a.annotation.getId == 1)
+
     })
 
     val query2 = Contains(FilterAnnotations("ge", "word"), Search("number"))
@@ -178,13 +178,12 @@ class AnnotatedSuccinctRDDSuite extends FunSuite with LocalSparkContext {
     res2.foreach(a => {
       assert(a.annotation.getStartOffset == 9)
       assert(a.annotation.getEndOffset == 15)
-      assert(a.annotation.getId == 3)
+
     })
 
     val query3 = Contains(FilterAnnotations("ge", "word"), Search("three"))
     val res3 = annotatedSuccinctRDD.query(query3).collect()
     assert(res3.length == 1)
-    assert(res3(0).annotation.getId == 5)
     assert(res3(0).annotation.getStartOffset == 16)
     assert(res3(0).annotation.getEndOffset == 21)
     assert(res3(0).annotation.getMetadata == "d^e")
@@ -193,7 +192,7 @@ class AnnotatedSuccinctRDDSuite extends FunSuite with LocalSparkContext {
     val res4 = annotatedSuccinctRDD.query(query4).collect()
     assert(res4.length == 6)
     res4.foreach(a => {
-      assert(a.annotation.getId == 2 || a.annotation.getId == 4)
+
       assert(a.annotation.getStartOffset == 8 || a.annotation.getStartOffset == 15)
       assert(a.annotation.getEndOffset == 9 || a.annotation.getEndOffset == 16)
       assert(a.annotation.getMetadata == "")
@@ -225,7 +224,7 @@ class AnnotatedSuccinctRDDSuite extends FunSuite with LocalSparkContext {
     res1.foreach(a => {
       assert(a.annotation.getStartOffset == 16)
       assert(a.annotation.getEndOffset == 19 | a.annotation.getEndOffset == 21)
-      assert(a.annotation.getId == 5)
+
     })
 
     val query2 = Contains(FilterAnnotations("ge", "word"), Regex("four|five|six"))
@@ -246,7 +245,6 @@ class AnnotatedSuccinctRDDSuite extends FunSuite with LocalSparkContext {
     res1.foreach(a => {
       assert(a.annotation.getStartOffset == 0)
       assert(a.annotation.getEndOffset == 8)
-      assert(a.annotation.getId == 1)
     })
 
     val query2 = ContainedIn(FilterAnnotations("ge", "word"), Search("number"))
@@ -255,7 +253,6 @@ class AnnotatedSuccinctRDDSuite extends FunSuite with LocalSparkContext {
     res2.foreach(a => {
       assert(a.annotation.getStartOffset == 9)
       assert(a.annotation.getEndOffset == 15)
-      assert(a.annotation.getId == 3)
     })
 
     val query3 = ContainedIn(FilterAnnotations("ge", "word"), Search("number three"))
@@ -264,14 +261,13 @@ class AnnotatedSuccinctRDDSuite extends FunSuite with LocalSparkContext {
     res3.foreach(a => {
       assert(a.annotation.getStartOffset == 9 || a.annotation.getStartOffset == 16)
       assert(a.annotation.getEndOffset == 15 || a.annotation.getEndOffset == 21)
-      assert(a.annotation.getId == 3 || a.annotation.getId == 5)
+
     })
 
     val query4 = ContainedIn(FilterAnnotations("ge", "space"), Search("Document number"))
     val res4 = annotatedSuccinctRDD.query(query4).collect()
     assert(res4.length == 3)
     res4.foreach(a => {
-      assert(a.annotation.getId == 2)
       assert(a.annotation.getStartOffset == 8)
       assert(a.annotation.getEndOffset == 9)
       assert(a.annotation.getMetadata == "")
@@ -287,7 +283,6 @@ class AnnotatedSuccinctRDDSuite extends FunSuite with LocalSparkContext {
     res6.foreach(a => {
       assert(a.annotation.getStartOffset == 9)
       assert(a.annotation.getEndOffset == 15)
-      assert(a.annotation.getId == 3)
     })
   }
 
@@ -308,7 +303,7 @@ class AnnotatedSuccinctRDDSuite extends FunSuite with LocalSparkContext {
     res2.foreach(a => {
       assert(a.annotation.getStartOffset == 0)
       assert(a.annotation.getEndOffset == 8)
-      assert(a.annotation.getId == 1)
+
     })
 
     val query3 = Before(FilterAnnotations("ge", "word"), Search("number three"))
@@ -317,14 +312,14 @@ class AnnotatedSuccinctRDDSuite extends FunSuite with LocalSparkContext {
     res3.foreach(a => {
       assert(a.annotation.getStartOffset == 0)
       assert(a.annotation.getEndOffset == 8)
-      assert(a.annotation.getId == 1)
+
     })
 
     val query4 = Before(FilterAnnotations("ge", "space"), Search("three"), 1)
     val res4 = annotatedSuccinctRDD.query(query4).collect()
     assert(res4.length == 1)
     res4.foreach(a => {
-      assert(a.annotation.getId == 4)
+
       assert(a.annotation.getStartOffset == 15)
       assert(a.annotation.getEndOffset == 16)
       assert(a.annotation.getMetadata == "")
@@ -334,7 +329,7 @@ class AnnotatedSuccinctRDDSuite extends FunSuite with LocalSparkContext {
     val res5 = annotatedSuccinctRDD.query(query5).collect()
     assert(res5.length == 1)
     res5.foreach(a => {
-      assert(a.annotation.getId == 1)
+
       assert(a.annotation.getStartOffset == 0)
       assert(a.annotation.getEndOffset == 8)
       assert(a.annotation.getMetadata == "a")
@@ -352,7 +347,7 @@ class AnnotatedSuccinctRDDSuite extends FunSuite with LocalSparkContext {
     val res1 = annotatedSuccinctRDD.query(query1).collect()
     assert(res1.length == 6)
     res1.foreach(a => {
-      assert(a.annotation.getId == 2 || a.annotation.getId == 4)
+
       assert(a.annotation.getStartOffset == 8 || a.annotation.getStartOffset == 15)
       assert(a.annotation.getEndOffset == 9 || a.annotation.getEndOffset == 16)
       assert(a.annotation.getMetadata == "")
@@ -364,7 +359,7 @@ class AnnotatedSuccinctRDDSuite extends FunSuite with LocalSparkContext {
     res2.foreach(a => {
       assert(a.annotation.getStartOffset == 16)
       assert(a.annotation.getEndOffset == 19 || a.annotation.getEndOffset == 21)
-      assert(a.annotation.getId == 5)
+
     })
 
     val query3 = After(FilterAnnotations("ge", "word"), Search("number three"))
@@ -375,7 +370,7 @@ class AnnotatedSuccinctRDDSuite extends FunSuite with LocalSparkContext {
     val res4 = annotatedSuccinctRDD.query(query4).collect()
     assert(res4.length == 3)
     res4.foreach(a => {
-      assert(a.annotation.getId == 2)
+
       assert(a.annotation.getStartOffset == 8)
       assert(a.annotation.getEndOffset == 9)
       assert(a.annotation.getMetadata == "")
@@ -385,7 +380,7 @@ class AnnotatedSuccinctRDDSuite extends FunSuite with LocalSparkContext {
     val res5 = annotatedSuccinctRDD.query(query5).collect()
     assert(res5.length == 2)
     res5.foreach(a => {
-      assert(a.annotation.getId == 3)
+
       assert(a.annotation.getStartOffset == 9)
       assert(a.annotation.getEndOffset == 15)
       assert(a.annotation.getMetadata.nonEmpty)
