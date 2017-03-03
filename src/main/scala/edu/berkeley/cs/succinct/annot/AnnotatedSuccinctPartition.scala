@@ -278,11 +278,11 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
       var curAnnot: Annotation = nextAnnot
 
       object AnnotationCache {
-        val cache = collection.mutable.Map[(Int, Int, String), AnnotationRecord]()
+        val cache = collection.mutable.Map[(Int, String), AnnotationRecord]()
 
-        def apply(bufIdx: Int, docId: String, docIdOffset: Int): AnnotationRecord = {
-          cache.getOrElseUpdate((bufIdx, docIdOffset, docId),
-            buffers(bufIdx).getAnnotationRecord(docId, docIdOffset))
+        def apply(bufIdx: Int, docId: String): AnnotationRecord = {
+          cache.getOrElseUpdate((bufIdx, docId),
+            buffers(bufIdx).getAnnotationRecord(docId, findKey(docId)))
         }
       }
 
@@ -297,8 +297,7 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
               curRes = if (it.hasNext) it.next() else null
               if (!hasNext) return null
             }
-            val docIdOffset = findKey(curRes.docId)
-            annotRecord = AnnotationCache(curBufIdx, curRes.docId, docIdOffset)
+            annotRecord = AnnotationCache(curBufIdx, curRes.docId)
           }
           annots = op(annotRecord, curRes.startOffset, curRes.endOffset)
         }
