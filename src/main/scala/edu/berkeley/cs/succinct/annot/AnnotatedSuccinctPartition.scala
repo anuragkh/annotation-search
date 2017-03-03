@@ -269,20 +269,6 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
 
     if (buffers.isEmpty) return Iterator[Result]()
 
-    implicit class IteratorWrapper[T](it: Iterator[T]) {
-      def distinct = new Iterator[T] {
-        var distinctStream: Stream[T] = it.toStream.distinct
-
-        override def hasNext: Boolean = distinctStream.nonEmpty
-
-        override def next(): T = {
-          val toReturn = distinctStream.head
-          distinctStream = distinctStream.tail
-          toReturn
-        }
-      }
-    }
-
     new Iterator[Result] {
       var seenSoFar: Set[Annotation] = Set[Annotation]()
       var curBufIdx: Int = buffers.length - 1
@@ -290,6 +276,15 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
       var curRes: Result = _
       var curAnnots: Array[Annotation] = nextAnnots
       var curAnnot: Annotation = nextAnnot
+
+      object AnnotationCache {
+        val cache = collection.mutable.Map[(Int, Int, String), AnnotationRecord]()
+
+        def apply(bufIdx: Int, docId: String, docIdOffset: Int): AnnotationRecord = {
+          cache.getOrElseUpdate((bufIdx, docIdOffset, docId),
+            buffers(bufIdx).getAnnotationRecord(docId, docIdOffset))
+        }
+      }
 
       def nextAnnots: Array[Annotation] = {
         var annots: Array[Annotation] = Array[Annotation]()
@@ -303,7 +298,7 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
               if (!hasNext) return null
             }
             val docIdOffset = findKey(curRes.docId)
-            annotRecord = buffers(curBufIdx).getAnnotationRecord(curRes.docId, docIdOffset)
+            annotRecord = AnnotationCache(curBufIdx, curRes.docId, docIdOffset)
           }
           annots = op(annotRecord, curRes.startOffset, curRes.endOffset)
         }
