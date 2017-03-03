@@ -98,6 +98,10 @@ abstract class AnnotatedSuccinctRDD(@transient private val sc: SparkContext,
     partitionsRDD.flatMap(_.query(operator))
   }
 
+  def queryPlan(operator: Operator): Array[String] = {
+    partitionsRDD.map(_.queryPlan(operator)).collect
+  }
+
   def count(operator: Operator): Long = {
     partitionsRDD.map(_.count(operator)).collect().sum
   }

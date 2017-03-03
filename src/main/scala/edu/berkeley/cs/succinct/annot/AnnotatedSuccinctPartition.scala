@@ -722,6 +722,55 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
     }
   }
 
+  /**
+    * Display query plan.
+    *
+    * @param operator An arbitrary expression tree composed of Contains, ContainedIn, Before, After,
+    *                 FilterAnnotations, Search and RegexSearch.
+    * @return String representation of the query plan
+    */
+  def queryPlan(operator: Operator): String = {
+    operator match {
+      case Search(query) => "search(" + query + ")\n"
+      case Regex(query) => "regexSearch(" + query + ")\n"
+      case FilterAnnotations(acFilter, atFilter, mFilter, tFilter) =>
+        s"filterAnnotations($acFilter, $atFilter, $mFilter, $tFilter)"
+      case Contains(a, b) =>
+        (a, b) match {
+          case (_, FilterAnnotations(acFilter, atFilter, mFilter, tFilter)) =>
+            s"opContainingAnnotations(${queryPlan(a)}, $acFilter, $atFilter, $mFilter, $tFilter)"
+          case (FilterAnnotations(acFilter, atFilter, mFilter, tFilter), _) =>
+            s"annotationsContainingOp($acFilter, $atFilter, $mFilter, $tFilter, ${queryPlan(b)})"
+          case _ => s"opContainingOp(${queryPlan(a)}, ${queryPlan(b)})"
+        }
+      case ContainedIn(a, b) =>
+        (a, b) match {
+          case (_, FilterAnnotations(acFilter, atFilter, mFilter, tFilter)) =>
+            s"opContainedInAnnotations(${queryPlan(a)}, $acFilter, $atFilter, $mFilter, $tFilter)"
+          case (FilterAnnotations(acFilter, atFilter, mFilter, tFilter), _) =>
+            s"annotationsContainedInOp($acFilter, $atFilter, $mFilter, $tFilter, ${queryPlan(b)})"
+          case _ => s"opContainedInOp(${queryPlan(a)}, ${query(b)})"
+        }
+      case Before(a, b, range) =>
+        (a, b) match {
+          case (_, FilterAnnotations(acFilter, atFilter, mFilter, tFilter)) =>
+            s"opBeforeAnnotations(${queryPlan(a)}, $acFilter, $atFilter, $mFilter, $tFilter, $range)"
+          case (FilterAnnotations(acFilter, atFilter, mFilter, tFilter), _) =>
+            s"annotationsBeforeOp($acFilter, $atFilter, $mFilter, $tFilter, ${queryPlan(b)}, $range)"
+          case _ => s"opBeforeOp(${queryPlan(a)}, ${query(b)}, $range)"
+        }
+      case After(a, b, range) =>
+        (a, b) match {
+          case (_, FilterAnnotations(acFilter, atFilter, mFilter, tFilter)) =>
+            s"opAfterAnnotations(${queryPlan(a)}, $acFilter, $atFilter, $mFilter, $tFilter, $range)"
+          case (FilterAnnotations(acFilter, atFilter, mFilter, tFilter), _) =>
+            s"annotationsAfterOp($acFilter, $atFilter, $mFilter, $tFilter, ${queryPlan(b)}, $range)"
+          case _ => s"opAfterOp(${queryPlan(a)}, ${queryPlan(b)}, $range)"
+        }
+      case unknown => throw new UnsupportedOperationException(s"Operation $unknown not supported.")
+    }
+  }
+
   def count(operator: Operator): Int = {
     operator match {
       case Search(query) => count(query)
