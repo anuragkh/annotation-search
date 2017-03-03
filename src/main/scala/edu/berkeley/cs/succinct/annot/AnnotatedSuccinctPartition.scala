@@ -731,8 +731,8 @@ class AnnotatedSuccinctPartition(val keys: Array[String], val documentBuffer: Su
     */
   def queryPlan(operator: Operator): String = {
     operator match {
-      case Search(query) => "search(" + query + ")\n"
-      case Regex(query) => "regexSearch(" + query + ")\n"
+      case Search(query) => "search(" + query + ")"
+      case Regex(query) => "regexSearch(" + query + ")"
       case FilterAnnotations(acFilter, atFilter, mFilter, tFilter) =>
         s"filterAnnotations($acFilter, $atFilter, $mFilter, $tFilter)"
       case Contains(a, b) =>
